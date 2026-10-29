@@ -67,14 +67,6 @@ CREATE TABLE trip_feedback (
 );
 
 -- Indexes
-CREATE INDEX idx_travel_plans_user
-    ON travel_plans(user_id);
 
-CREATE INDEX idx_travel_plans_dates
-    ON travel_plans(start_date, end_date);
-
-CREATE INDEX idx_plan_places_place
-    ON plan_places(place_id);
-
-CREATE INDEX idx_trip_feedback_user
-    ON trip_feedback(user_id);
+CREATE INDEX idx_travel_plans_user_created
+ON travel_plans(user_id, created_at DESC);

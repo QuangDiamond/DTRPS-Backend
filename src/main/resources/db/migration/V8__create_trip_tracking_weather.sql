@@ -69,12 +69,6 @@ CREATE TABLE weather_forecasts (
         UNIQUE (place_id, forecast_date)
 );
 
--- Indexes
+-- Index 
 CREATE INDEX idx_trip_progress_user
-    ON trip_progress(user_id);
-
-CREATE INDEX idx_activity_progress_item
-    ON activity_progress(item_id);
-
-CREATE INDEX idx_weather_forecasts_date
-    ON weather_forecasts(forecast_date);
+ON trip_progress(user_id);

@@ -118,20 +118,8 @@ CREATE TABLE itinerary_shares (
 );
 
 -- Indexes
-CREATE INDEX idx_itineraries_plan
-    ON itineraries(plan_id);
 
-CREATE INDEX idx_itinerary_days_itinerary
-    ON itinerary_days(itinerary_id);
-
-CREATE INDEX idx_itinerary_items_day
-    ON itinerary_items(day_id);
 
 CREATE INDEX idx_itinerary_items_place
     ON itinerary_items(place_id);
 
-CREATE INDEX idx_itinerary_shares_itinerary
-    ON itinerary_shares(itinerary_id);
-
-CREATE INDEX idx_itinerary_shares_creator
-    ON itinerary_shares(created_by);
