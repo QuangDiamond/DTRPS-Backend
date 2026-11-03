@@ -160,9 +160,40 @@ Controllers call services and services call repositories. Every table has an ent
 | PUT | `/api/users/me` | Bearer | Update name, phone, date of birth, avatar |
 | GET | `/api/users/me/preferences` | Bearer | Travel preferences |
 | PUT | `/api/users/me/preferences` | Bearer | Replace travel preferences |
-| GET | `/api/admin/users?page=0&size=20` | ADMIN | Paginated user list, `size` up to 100 |
-| GET | `/api/admin/users/{id}` | ADMIN | One user |
-| PUT | `/api/admin/users/{id}/status` | ADMIN | Set `ACTIVE` or `SUSPENDED` |
+| GET | `/api/admin/users?page=0&size=20` | ADMIN | Newest first, `size` up to 100. Optional `keyword` (name, email, phone), `role` (TRAVELLER, BUSINESS_OWNER, ADMIN), `status` (ACTIVE, SUSPENDED). Items include `createdAt` and `statusNote` (lock reason) |
+| GET | `/api/admin/users/stats` | ADMIN | Totals by status and role, new this month |
+| GET | `/api/admin/users/{id}` | ADMIN | One user, with `statusNote` while suspended |
+| PUT | `/api/admin/users/{id}/status` | ADMIN | Set `ACTIVE` or `SUSPENDED`; optional `reason` is kept in the audit log |
+| POST | `/api/business-profile` | Bearer | Register own business profile (`businessName`, `taxCode`, `contactEmail`, `contactPhone`), starts `PENDING` |
+| GET | `/api/business-profile` | Bearer | Own business profile; `statusNote` holds the admin's reason when rejected or locked |
+| PUT | `/api/business-profile` | Bearer | Edit own profile; a rejected (`INACTIVE`) profile goes back to `PENDING` |
+| GET | `/api/admin/business-profiles?status=&keyword=&page=0&size=20` | ADMIN | Paginated business profiles, newest first |
+| GET | `/api/admin/business-profiles/stats` | ADMIN | Counts: `total`, `pending`, `active`, `suspended`, `rejected`, `newThisMonth` |
+| GET | `/api/admin/business-profiles/{id}` | ADMIN | One business profile |
+| POST | `/api/admin/business-profiles/{id}/approve` | ADMIN | `PENDING` → `ACTIVE`, grants `BUSINESS_OWNER` (owner sees it after refresh or login) |
+| POST | `/api/admin/business-profiles/{id}/reject` | ADMIN | `PENDING` → `INACTIVE`, needs `reason` |
+| PUT | `/api/admin/business-profiles/{id}/status` | ADMIN | Lock (`SUSPENDED`, needs `reason`) or unlock (`ACTIVE`) |
+| GET | `/api/reference/provinces` | Bearer | 34 provinces `{code, name}`, sorted by name |
+| GET | `/api/reference/categories` | Bearer | 4 service groups, each with its active `subtypes` |
+| POST | `/api/business-listing` | Bearer | ACTIVE business submits its one place (`name`, `categoryCode` = subtype, `provinceCode`, `address`, `latitude`, `longitude`, optional `description`, `phone`, `website`, `openingHours[]` `{dayOfWeek 1-7, openTime, closeTime, closed}`, `prices[]` `{priceType, amount, currency, description}`, `images[]` `{url https, primary}` up to 10): listing `PENDING`, place `DRAFT` |
+| GET | `/api/business-listing` | Bearer | Own place; `statusNote` holds the rejection reason |
+| PUT | `/api/business-listing` | Bearer | Edit while `PENDING` or `REJECTED` (a rejected one goes back to `PENDING`); approved places change through revisions |
+| POST | `/api/business-listing/revisions` | Bearer | Propose a change to the approved place (same body as the listing); the public place is unchanged until approved. One `PENDING` revision at a time |
+| GET | `/api/business-listing/revisions` | Bearer | Own revisions, newest first, with `rejectReasonCode` and `partnerFeedback` |
+| POST | `/api/business-listing/revisions/{id}/cancel` | Bearer | Withdraw a `PENDING` revision → `CANCELLED` |
+| GET | `/api/admin/listing-revisions?status=&keyword=&page=0&size=20` | ADMIN | Revision queue, newest first |
+| GET | `/api/admin/listing-revisions/{id}` | ADMIN | `{ revision, current }`: the proposal next to the public place |
+| POST | `/api/admin/listing-revisions/{id}/approve` | ADMIN | Copies the proposal (incl. hours, prices, photos) to the place; optional internal `note` |
+| POST | `/api/admin/listing-revisions/{id}/reject` | ADMIN | Needs `reasonCode` (`pricing`, `location`, `photos`, `duplicate`, `other`), `partnerFeedback` and `note` (required review note, stored in `review_note`, internal) |
+| POST | `/api/uploads/images` | BUSINESS_OWNER, ADMIN | Multipart `file` (jpg/png/webp checked by content, max 5MB). Stores it on Cloudinary and returns `{ url }`. Needs `CLOUDINARY_URL` (env or gitignored `.env.local`); without it the endpoint answers 503 |
+| GET | `/api/admin/places` | ADMIN | Every place (platform POIs + partner places), newest update first. Filters: `keyword`, `group`, `province`, `status` (DRAFT, ACTIVE, PAUSED, MAINTENANCE), `source` (PARTNER, ADMIN), `page`, `size`. Rows carry business, listing status, cover, photo count and rating |
+| GET | `/api/admin/places/stats` | ADMIN | Totals by status and source, new this month, counts per group |
+| GET | `/api/admin/places/{id}` | ADMIN | `{ summary, description, latitude, longitude, phone, website, openingHours, prices, images }` |
+| GET | `/api/admin/business-listings?status=&keyword=&page=0&size=20` | ADMIN | Paginated listings, newest first |
+| GET | `/api/admin/business-listings/stats` | ADMIN | Counts: `total`, `pending`, `approved`, `rejected`, `suspended` |
+| GET | `/api/admin/business-listings/{id}` | ADMIN | One listing |
+| POST | `/api/admin/business-listings/{id}/approve` | ADMIN | `PENDING` → `APPROVED`, place becomes `ACTIVE` (business must be `ACTIVE`) |
+| POST | `/api/admin/business-listings/{id}/reject` | ADMIN | `PENDING` → `REJECTED`, needs `reason` |
 | GET | `/api/health` | Public | Health check |
 
 Swagger UI is at `/swagger-ui/index.html` and the OpenAPI document at `/v3/api-docs`. To call protected routes, log in, press **Authorize** and paste the `accessToken`.

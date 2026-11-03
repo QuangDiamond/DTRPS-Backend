@@ -3,6 +3,7 @@ package com.dtrps.modules.user.controller;
 import com.dtrps.common.PageResponse;
 import com.dtrps.modules.user.dto.UpdateUserStatusRequest;
 import com.dtrps.modules.user.dto.UserResponse;
+import com.dtrps.modules.user.dto.UserStatsResponse;
 import com.dtrps.modules.user.service.UserService;
 import com.dtrps.security.CurrentUser;
 import jakarta.validation.Valid;
@@ -33,16 +34,29 @@ public class AdminUserController {
     this.userService = userService;
   }
 
+  /**
+   * Newest accounts first. Optional filters: {@code keyword} (name, email, phone), {@code role}
+   * (TRAVELLER, BUSINESS_OWNER, ADMIN), {@code status} (ACTIVE, SUSPENDED).
+   */
   @GetMapping
   public PageResponse<UserResponse> list(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) String role,
+      @RequestParam(required = false) String status,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size) {
-    return userService.list(PageRequest.of(page, size, Sort.by("userId")));
+    return userService.list(
+        keyword, role, status, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "userId")));
+  }
+
+  @GetMapping("/stats")
+  public UserStatsResponse stats() {
+    return userService.stats();
   }
 
   @GetMapping("/{id}")
   public UserResponse get(@PathVariable Long id) {
-    return userService.getProfile(id);
+    return userService.getForAdmin(id);
   }
 
   @PutMapping("/{id}/status")
@@ -50,6 +64,6 @@ public class AdminUserController {
       @AuthenticationPrincipal Jwt jwt,
       @PathVariable Long id,
       @Valid @RequestBody UpdateUserStatusRequest request) {
-    return userService.updateStatus(CurrentUser.id(jwt), id, request.status());
+    return userService.updateStatus(CurrentUser.id(jwt), id, request.status(), request.reason());
   }
 }

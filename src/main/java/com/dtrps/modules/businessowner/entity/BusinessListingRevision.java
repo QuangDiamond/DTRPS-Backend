@@ -87,7 +87,10 @@ public class BusinessListingRevision {
   @Column(name = "longitude")
   private Double longitude;
 
-  /** Full proposed content (contact, hours, prices, photos, attributes), applied to the place on approval */
+  /**
+   * Full proposed content (contact, hours, prices, photos, attributes), applied to the place on
+   * approval
+   */
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "payload", columnDefinition = "jsonb")
   private String payload;

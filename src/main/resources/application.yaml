@@ -1,4 +1,8 @@
 spring:
+  config:
+    # Optional local secrets (gitignored), e.g. CLOUDINARY_URL=cloudinary://key:secret@cloud
+    import: optional:file:.env.local[.properties]
+
   # Defaults point at the team's shared DB on the server, so the app runs without any setup.
   # This DB also serves the live API. Set DB_URL, DB_USER and DB_PASSWORD to use another one.
   datasource:
@@ -14,6 +18,12 @@ spring:
     properties:
       hibernate.schema_update.unique_constraint_strategy: RECREATE_QUIETLY
     open-in-view: false
+
+  servlet:
+    multipart:
+      # The service rejects files over 5MB with a clear message; this only caps the raw request
+      max-file-size: 10MB
+      max-request-size: 10MB
 
   sql:
     init:
@@ -37,3 +47,8 @@ app:
     admin-email: ${ADMIN_EMAIL:}
     admin-password: ${ADMIN_PASSWORD:}
     admin-name: ${ADMIN_NAME:System Admin}
+  # Image uploads (POST /api/uploads/images). Copy the value from Cloudinary > API Keys.
+  # Blank disables uploads (the endpoint answers 503).
+  cloudinary:
+    url: ${CLOUDINARY_URL:}
+    folder: ${CLOUDINARY_FOLDER:dtrps/places}

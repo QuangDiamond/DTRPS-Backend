@@ -85,7 +85,9 @@ public class Place {
   @Column(name = "website", columnDefinition = "text")
   private String website;
 
-  /** Category-specific details: amenities, services, booking link, visit rules, best time, tags... */
+  /**
+   * Category-specific details: amenities, services, booking link, visit rules, best time, tags...
+   */
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name = "attributes", columnDefinition = "jsonb")
   private String attributes;
