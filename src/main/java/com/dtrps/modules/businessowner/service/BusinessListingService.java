@@ -19,6 +19,7 @@ import com.dtrps.modules.poi.service.PlaceReferenceResolver;
 import com.dtrps.modules.user.repository.UserRepository;
 import jakarta.persistence.criteria.Join;
 import java.time.Clock;
+import java.util.List;
 import java.util.Locale;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -60,8 +61,6 @@ public class BusinessListingService {
 
   private static final String PROFILE_NOT_ACTIVE =
       "Hồ sơ doanh nghiệp của bạn cần được duyệt trước khi đăng ký địa điểm";
-  private static final String LISTING_EXISTS = "Mỗi doanh nghiệp chỉ được đăng ký một địa điểm";
-  private static final String NO_LISTING_YET = "Bạn chưa đăng ký địa điểm";
   private static final String LISTING_NOT_FOUND = "Không tìm thấy địa điểm";
   private static final String NOT_EDITABLE =
       "Địa điểm đã được duyệt — vui lòng gửi đề xuất chỉnh sửa để Admin xét duyệt";
@@ -102,9 +101,6 @@ public class BusinessListingService {
   @Transactional
   public BusinessListingResponse submit(Long userId, BusinessListingRequest request) {
     BusinessProfile business = activeBusinessOf(userId);
-    if (listingRepository.existsByBusinessBusinessId(business.getBusinessId())) {
-      throw new ApiException(HttpStatus.CONFLICT, LISTING_EXISTS);
-    }
     PlaceDetails details = normalizedDetails(request);
     Place place = new Place();
     applyBasics(place, request);
@@ -121,16 +117,25 @@ public class BusinessListingService {
     return toResponse(listing);
   }
 
+  /** Every place of the signed-in owner, newest first. */
   @Transactional(readOnly = true)
-  public BusinessListingResponse getOwn(Long userId) {
-    return toResponse(findOwn(userId));
+  public List<BusinessListingResponse> listOwn(Long userId) {
+    return listingRepository.findByBusinessUserUserIdOrderByListingIdDesc(userId).stream()
+        .map(this::toResponse)
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
+  public BusinessListingResponse getOwn(Long userId, Long listingId) {
+    return toResponse(findOwn(userId, listingId));
   }
 
   /** Editable while waiting or after a rejection; a rejected listing goes back to PENDING. */
   @Transactional
-  public BusinessListingResponse updateOwn(Long userId, BusinessListingRequest request) {
+  public BusinessListingResponse updateOwn(
+      Long userId, Long listingId, BusinessListingRequest request) {
     activeBusinessOf(userId);
-    BusinessListing listing = findOwn(userId);
+    BusinessListing listing = findOwn(userId, listingId);
     if (!PENDING.equals(listing.getStatus()) && !REJECTED.equals(listing.getStatus())) {
       throw new ApiException(HttpStatus.CONFLICT, NOT_EDITABLE);
     }
@@ -153,7 +158,19 @@ public class BusinessListingService {
   @Transactional(readOnly = true)
   public PageResponse<BusinessListingResponse> list(
       String status, String keyword, Pageable pageable) {
+    return list(status, keyword, null, pageable);
+  }
+
+  /** As above, optionally limited to one business ({@code businessId}). */
+  @Transactional(readOnly = true)
+  public PageResponse<BusinessListingResponse> list(
+      String status, String keyword, Long businessId, Pageable pageable) {
     Specification<BusinessListing> spec = (root, query, cb) -> cb.conjunction();
+    if (businessId != null) {
+      spec =
+          spec.and(
+              (root, query, cb) -> cb.equal(root.get("business").get("businessId"), businessId));
+    }
     if (status != null && !status.isBlank()) {
       String wanted = status.trim().toUpperCase(Locale.ROOT);
       spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), wanted));
@@ -221,10 +238,12 @@ public class BusinessListingService {
         .orElseThrow(() -> new ApiException(HttpStatus.FORBIDDEN, PROFILE_NOT_ACTIVE));
   }
 
-  BusinessListing findOwn(Long userId) {
+  /** One of the owner's places; someone else's place looks the same as a missing one. */
+  BusinessListing findOwn(Long userId, Long listingId) {
     return listingRepository
-        .findByBusinessUserUserId(userId)
-        .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, NO_LISTING_YET));
+        .findWithDetailsByListingId(listingId)
+        .filter(listing -> listing.getBusiness().getUser().getUserId().equals(userId))
+        .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, LISTING_NOT_FOUND));
   }
 
   void requireActiveBusiness(BusinessListing listing) {

@@ -95,9 +95,10 @@ public class ListingRevisionService {
   // ===== Business owner =====
 
   @Transactional
-  public ListingRevisionResponse propose(Long userId, BusinessListingRequest request) {
+  public ListingRevisionResponse propose(
+      Long userId, Long listingId, BusinessListingRequest request) {
     listingService.activeBusinessOf(userId);
-    BusinessListing listing = listingService.findOwn(userId);
+    BusinessListing listing = listingService.findOwn(userId, listingId);
     if (!BusinessListingService.APPROVED.equals(listing.getStatus())) {
       throw new ApiException(HttpStatus.CONFLICT, NOT_APPROVED_YET);
     }
@@ -130,10 +131,10 @@ public class ListingRevisionService {
     return toResponse(revision, false);
   }
 
-  /** The owner's revisions, newest first. */
+  /** Revisions of one of the owner's places, newest first. */
   @Transactional(readOnly = true)
-  public List<ListingRevisionResponse> listOwn(Long userId) {
-    BusinessListing listing = listingService.findOwn(userId);
+  public List<ListingRevisionResponse> listOwn(Long userId, Long listingId) {
+    BusinessListing listing = listingService.findOwn(userId, listingId);
     return revisionRepository
         .findByListingListingIdOrderByRevisionIdDesc(listing.getListingId())
         .stream()

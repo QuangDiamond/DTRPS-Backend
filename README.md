@@ -175,12 +175,13 @@ Controllers call services and services call repositories. Every table has an ent
 | PUT | `/api/admin/business-profiles/{id}/status` | ADMIN | Lock (`SUSPENDED`, needs `reason`) or unlock (`ACTIVE`) |
 | GET | `/api/reference/provinces` | Bearer | 34 provinces `{code, name}`, sorted by name |
 | GET | `/api/reference/categories` | Bearer | 4 service groups, each with its active `subtypes` |
-| POST | `/api/business-listing` | Bearer | ACTIVE business submits its one place (`name`, `categoryCode` = subtype, `provinceCode`, `address`, `latitude`, `longitude`, optional `description`, `phone`, `website`, `openingHours[]` `{dayOfWeek 1-7, openTime, closeTime, closed}`, `prices[]` `{priceType, amount, currency, description}`, `images[]` `{url https, primary}` up to 10): listing `PENDING`, place `DRAFT` |
-| GET | `/api/business-listing` | Bearer | Own place; `statusNote` holds the rejection reason |
-| PUT | `/api/business-listing` | Bearer | Edit while `PENDING` or `REJECTED` (a rejected one goes back to `PENDING`); approved places change through revisions |
-| POST | `/api/business-listing/revisions` | Bearer | Propose a change to the approved place (same body as the listing); the public place is unchanged until approved. One `PENDING` revision at a time |
-| GET | `/api/business-listing/revisions` | Bearer | Own revisions, newest first, with `rejectReasonCode` and `partnerFeedback` |
-| POST | `/api/business-listing/revisions/{id}/cancel` | Bearer | Withdraw a `PENDING` revision → `CANCELLED` |
+| GET | `/api/business-listings` | Bearer | Own places, newest first — a business may register several |
+| POST | `/api/business-listings` | Bearer | ACTIVE business submits a new place (`name`, `categoryCode` = subtype, `provinceCode`, `address`, `latitude`, `longitude`, optional `description`, `phone`, `website`, `openingHours[]` `{dayOfWeek 1-7, openTime, closeTime, closed}`, `prices[]` `{priceType, amount, currency, description}`, `images[]` `{url https, primary}` up to 10): listing `PENDING`, place `DRAFT` |
+| GET | `/api/business-listings/{id}` | Bearer | One own place (another owner's answers 404); `statusNote` holds the rejection reason |
+| PUT | `/api/business-listings/{id}` | Bearer | Edit while `PENDING` or `REJECTED` (a rejected one goes back to `PENDING`); approved places change through revisions |
+| POST | `/api/business-listings/{id}/revisions` | Bearer | Propose a change to the approved place (same body as the listing); the public place is unchanged until approved. One `PENDING` revision at a time |
+| GET | `/api/business-listings/{id}/revisions` | Bearer | That place's revisions, newest first, with `rejectReasonCode` and `partnerFeedback` |
+| POST | `/api/business-listings/revisions/{revisionId}/cancel` | Bearer | Withdraw a `PENDING` revision → `CANCELLED` |
 | GET | `/api/admin/listing-revisions?status=&keyword=&page=0&size=20` | ADMIN | Revision queue, newest first |
 | GET | `/api/admin/listing-revisions/{id}` | ADMIN | `{ revision, current }`: the proposal next to the public place |
 | POST | `/api/admin/listing-revisions/{id}/approve` | ADMIN | Copies the proposal (incl. hours, prices, photos) to the place; optional internal `note` |
@@ -189,7 +190,7 @@ Controllers call services and services call repositories. Every table has an ent
 | GET | `/api/admin/places` | ADMIN | Every place (platform POIs + partner places), newest update first. Filters: `keyword`, `group`, `province`, `status` (DRAFT, ACTIVE, PAUSED, MAINTENANCE), `source` (PARTNER, ADMIN), `page`, `size`. Rows carry business, listing status, cover, photo count and rating |
 | GET | `/api/admin/places/stats` | ADMIN | Totals by status and source, new this month, counts per group |
 | GET | `/api/admin/places/{id}` | ADMIN | `{ summary, description, latitude, longitude, phone, website, openingHours, prices, images }` |
-| GET | `/api/admin/business-listings?status=&keyword=&page=0&size=20` | ADMIN | Paginated listings, newest first |
+| GET | `/api/admin/business-listings?status=&keyword=&page=0&size=20` | ADMIN | Paginated listings, newest first; optional `businessId` limits it to one partner |
 | GET | `/api/admin/business-listings/stats` | ADMIN | Counts: `total`, `pending`, `approved`, `rejected`, `suspended` |
 | GET | `/api/admin/business-listings/{id}` | ADMIN | One listing |
 | POST | `/api/admin/business-listings/{id}/approve` | ADMIN | `PENDING` → `APPROVED`, place becomes `ACTIVE` (business must be `ACTIVE`) |

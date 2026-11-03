@@ -48,7 +48,7 @@ class AdminPlaceApiTest extends ApiTestBase {
         List.of(
             Map.of("url", "https://cdn.example.com/a.jpg", "primary", false),
             Map.of("url", "https://cdn.example.com/cover.jpg", "primary", true)));
-    JsonNode listing = json(postAs("/api/business-listing", token, body));
+    JsonNode listing = json(postAs("/api/business-listings", token, body));
     if (approve) {
       postAs("/api/admin/business-listings/" + listing.get("id").asText() + "/approve", admin, null)
           .andExpect(status().isOk());

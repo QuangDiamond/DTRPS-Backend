@@ -13,6 +13,27 @@ ON place_images(place_id)
 WHERE is_primary = TRUE
 @@
 
+-- A business may own several places: drop the old one-listing-per-business unique constraint
+-- (ddl-auto=update never removes constraints, so databases created earlier still have it)
+DO $$
+DECLARE
+    old_constraint text;
+BEGIN
+    FOR old_constraint IN
+        SELECT c.conname
+        FROM pg_constraint c
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+        WHERE c.conrelid = 'business_listings'::regclass
+          AND c.contype = 'u'
+          AND array_length(c.conkey, 1) = 1
+          AND a.attname = 'business_id'
+    LOOP
+        EXECUTE format('ALTER TABLE business_listings DROP CONSTRAINT %I', old_constraint);
+    END LOOP;
+END
+$$
+@@
+
 -- Only one pending revision per listing
 CREATE UNIQUE INDEX IF NOT EXISTS uq_listing_pending_revision
 ON business_listing_revisions(listing_id)

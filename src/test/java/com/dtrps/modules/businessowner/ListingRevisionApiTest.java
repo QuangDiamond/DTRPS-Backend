@@ -13,8 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class ListingRevisionApiTest extends ApiTestBase {
-  private static final String LISTING = "/api/business-listing";
-  private static final String REVISIONS = LISTING + "/revisions";
+  private static final String LISTINGS = "/api/business-listings";
   private static final String ADMIN = "/api/admin/listing-revisions";
 
   private static Map<String, Object> placeBody(String name) {
@@ -59,7 +58,7 @@ class ListingRevisionApiTest extends ApiTestBase {
                     "contactPhone", "0912345678")));
     postAs("/api/admin/business-profiles/" + profile.get("id").asText() + "/approve", admin, null)
         .andExpect(status().isOk());
-    JsonNode listing = json(postAs(LISTING, token, placeBody("Mộc Phố Coffee")));
+    JsonNode listing = json(postAs(LISTINGS, token, placeBody("Mộc Phố Coffee")));
     if (approvePlace) {
       postAs("/api/admin/business-listings/" + listing.get("id").asText() + "/approve", admin, null)
           .andExpect(status().isOk());
@@ -67,10 +66,16 @@ class ListingRevisionApiTest extends ApiTestBase {
     return token;
   }
 
+  /** Path of the owner's (only) place in these tests. */
+  private String place(String token) throws Exception {
+    return LISTINGS + "/" + json(getAs(LISTINGS, token)).get(0).get("id").asText();
+  }
+
   @Test
   @DisplayName("hours, prices and photos are saved with the place; the first photo is the cover")
   void submit_savesDetails() throws Exception {
-    getAs(LISTING, owner(false))
+    String token = owner(false);
+    getAs(place(token), token)
         .andExpect(jsonPath("$.openingHours.length()").value(2))
         .andExpect(jsonPath("$.openingHours[0].openTime").value("07:00"))
         .andExpect(jsonPath("$.openingHours[1].closed").value(true))
@@ -91,11 +96,11 @@ class ListingRevisionApiTest extends ApiTestBase {
         List.of(
             Map.of("dayOfWeek", 2, "openTime", "07:00", "closeTime", "22:00", "closed", false),
             Map.of("dayOfWeek", 2, "closed", true)));
-    putAs(LISTING, token, duplicateDay).andExpect(status().isBadRequest());
+    putAs(place(token), token, duplicateDay).andExpect(status().isBadRequest());
 
     Map<String, Object> missingTimes = placeBody("Thiếu giờ");
     missingTimes.put("openingHours", List.of(Map.of("dayOfWeek", 3, "closed", false)));
-    putAs(LISTING, token, missingTimes).andExpect(status().isBadRequest());
+    putAs(place(token), token, missingTimes).andExpect(status().isBadRequest());
 
     Map<String, Object> twoCovers = placeBody("Hai ảnh bìa");
     twoCovers.put(
@@ -103,46 +108,53 @@ class ListingRevisionApiTest extends ApiTestBase {
         List.of(
             Map.of("url", "https://cdn.example.com/a.jpg", "primary", true),
             Map.of("url", "https://cdn.example.com/b.jpg", "primary", true)));
-    putAs(LISTING, token, twoCovers).andExpect(status().isBadRequest());
+    putAs(place(token), token, twoCovers).andExpect(status().isBadRequest());
 
     Map<String, Object> notHttps = placeBody("Ảnh http");
     notHttps.put("images", List.of(Map.of("url", "http://cdn.example.com/a.jpg")));
-    putAs(LISTING, token, notHttps).andExpect(status().isBadRequest());
+    putAs(place(token), token, notHttps).andExpect(status().isBadRequest());
   }
 
   @Test
   @DisplayName("revisions are only for approved places, one pending at a time")
   void propose_rules() throws Exception {
-    postAs(REVISIONS, owner(false), placeBody("Chưa duyệt")).andExpect(status().isConflict());
+    String draft = owner(false);
+    postAs(place(draft) + "/revisions", draft, placeBody("Chưa duyệt"))
+        .andExpect(status().isConflict());
 
     String token = owner(true);
-    postAs(REVISIONS, token, placeBody("Đề xuất 1"))
+    postAs(place(token) + "/revisions", token, placeBody("Đề xuất 1"))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.status").value("PENDING"));
-    postAs(REVISIONS, token, placeBody("Đề xuất 2")).andExpect(status().isConflict());
+    postAs(place(token) + "/revisions", token, placeBody("Đề xuất 2"))
+        .andExpect(status().isConflict());
   }
 
   @Test
   @DisplayName("the owner withdraws a pending revision and can then propose again")
   void cancel_thenProposeAgain() throws Exception {
     String token = owner(true);
-    String id = json(postAs(REVISIONS, token, placeBody("Đề xuất"))).get("id").asText();
+    String id =
+        json(postAs(place(token) + "/revisions", token, placeBody("Đề xuất"))).get("id").asText();
 
-    postAs(REVISIONS + "/" + id + "/cancel", token, null)
+    postAs(LISTINGS + "/revisions/" + id + "/cancel", token, null)
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("CANCELLED"));
-    postAs(REVISIONS + "/" + id + "/cancel", token, null).andExpect(status().isConflict());
-    postAs(REVISIONS + "/" + id + "/cancel", owner(true), null).andExpect(status().isNotFound());
+    postAs(LISTINGS + "/revisions/" + id + "/cancel", token, null).andExpect(status().isConflict());
+    postAs(LISTINGS + "/revisions/" + id + "/cancel", owner(true), null)
+        .andExpect(status().isNotFound());
 
-    postAs(REVISIONS, token, placeBody("Đề xuất mới")).andExpect(status().isCreated());
-    getAs(REVISIONS, token).andExpect(jsonPath("$.length()").value(2));
+    postAs(place(token) + "/revisions", token, placeBody("Đề xuất mới"))
+        .andExpect(status().isCreated());
+    getAs(place(token) + "/revisions", token).andExpect(jsonPath("$.length()").value(2));
   }
 
   @Test
   @DisplayName("a rejection gives the owner a reason code and feedback, never the internal note")
   void reject_showsFeedback() throws Exception {
     String token = owner(true);
-    String id = json(postAs(REVISIONS, token, placeBody("Giá mới"))).get("id").asText();
+    String id =
+        json(postAs(place(token) + "/revisions", token, placeBody("Giá mới"))).get("id").asText();
     String admin = adminToken();
 
     postAs(ADMIN + "/" + id + "/reject", admin, Map.of("reasonCode", "pricing"))
@@ -165,11 +177,11 @@ class ListingRevisionApiTest extends ApiTestBase {
         .andExpect(jsonPath("$.status").value("REJECTED"))
         .andExpect(jsonPath("$.reviewNote").value("Đã gọi xác minh"));
 
-    getAs(REVISIONS, token)
+    getAs(place(token) + "/revisions", token)
         .andExpect(jsonPath("$[0].rejectReasonCode").value("pricing"))
         .andExpect(jsonPath("$[0].partnerFeedback").value("Giá chưa khớp menu thực tế"))
         .andExpect(jsonPath("$[0].reviewNote").isEmpty());
-    getAs(LISTING, token).andExpect(jsonPath("$.name").value("Mộc Phố Coffee"));
+    getAs(place(token), token).andExpect(jsonPath("$.name").value("Mộc Phố Coffee"));
   }
 
   @Test
@@ -186,7 +198,7 @@ class ListingRevisionApiTest extends ApiTestBase {
     change.put("prices", List.of());
     change.put(
         "images", List.of(Map.of("url", "https://cdn.example.com/new.jpg", "primary", true)));
-    String id = json(postAs(REVISIONS, token, change)).get("id").asText();
+    String id = json(postAs(place(token) + "/revisions", token, change)).get("id").asText();
     String admin = adminToken();
 
     getAs(ADMIN + "?status=PENDING&keyword=Books", admin).andExpect(jsonPath("$.total").value(1));
@@ -198,7 +210,7 @@ class ListingRevisionApiTest extends ApiTestBase {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.revision.status").value("APPROVED"));
 
-    getAs(LISTING, token)
+    getAs(place(token), token)
         .andExpect(jsonPath("$.name").value("Mộc Phố Coffee & Books"))
         .andExpect(jsonPath("$.category.code").value("restaurant"))
         .andExpect(jsonPath("$.website").value("https://mocpho.vn"))

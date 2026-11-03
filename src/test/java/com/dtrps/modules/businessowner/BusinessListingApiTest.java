@@ -13,7 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class BusinessListingApiTest extends ApiTestBase {
-  private static final String OWN = "/api/business-listing";
+  private static final String OWN = "/api/business-listings";
   private static final String ADMIN = "/api/admin/business-listings";
 
   private static Map<String, Object> placeBody(String name) {
@@ -70,18 +70,29 @@ class BusinessListingApiTest extends ApiTestBase {
 
     getAs(OWN, token)
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.name").value("Hội An Garden Homestay"));
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].name").value("Hội An Garden Homestay"));
   }
 
   @Test
-  @DisplayName("only an ACTIVE business may submit, and only one place")
+  @DisplayName("only an ACTIVE business may submit; a business may own several places")
   void submit_rules() throws Exception {
     postAs(OWN, travellerToken(), placeBody("Không có hồ sơ")).andExpect(status().isForbidden());
     postAs(OWN, ownerToken(false), placeBody("Hồ sơ chờ duyệt")).andExpect(status().isForbidden());
 
     String token = ownerToken(true);
     postAs(OWN, token, placeBody("Địa điểm 1")).andExpect(status().isCreated());
-    postAs(OWN, token, placeBody("Địa điểm 2")).andExpect(status().isConflict());
+    postAs(OWN, token, placeBody("Địa điểm 2")).andExpect(status().isCreated());
+    getAs(OWN, token)
+        .andExpect(jsonPath("$.length()").value(2))
+        .andExpect(jsonPath("$[0].name").value("Địa điểm 2"));
+
+    // Another owner cannot read or edit these places
+    String firstId = json(getAs(OWN, token)).get(1).get("id").asText();
+    String stranger = ownerToken(true);
+    getAs(OWN + "/" + firstId, stranger).andExpect(status().isNotFound());
+    putAs(OWN + "/" + firstId, stranger, placeBody("Chiếm quyền")).andExpect(status().isNotFound());
+    getAs(OWN, stranger).andExpect(jsonPath("$.length()").value(0));
   }
 
   @Test
@@ -119,9 +130,10 @@ class BusinessListingApiTest extends ApiTestBase {
     postAs(ADMIN + "/" + id + "/reject", admin, Map.of("reason", "Ảnh và tọa độ chưa khớp"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("REJECTED"));
-    getAs(OWN, token).andExpect(jsonPath("$.statusNote").value("Ảnh và tọa độ chưa khớp"));
+    getAs(OWN + "/" + id, token)
+        .andExpect(jsonPath("$.statusNote").value("Ảnh và tọa độ chưa khớp"));
 
-    putAs(OWN, token, placeBody("Hội An Garden Homestay"))
+    putAs(OWN + "/" + id, token, placeBody("Hội An Garden Homestay"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("PENDING"))
         .andExpect(jsonPath("$.statusNote").isEmpty());
@@ -133,7 +145,7 @@ class BusinessListingApiTest extends ApiTestBase {
         .andExpect(jsonPath("$.approvedAt").isNotEmpty());
 
     postAs(ADMIN + "/" + id + "/approve", admin, null).andExpect(status().isConflict());
-    putAs(OWN, token, placeBody("Sửa sau khi duyệt")).andExpect(status().isConflict());
+    putAs(OWN + "/" + id, token, placeBody("Sửa sau khi duyệt")).andExpect(status().isConflict());
   }
 
   @Test

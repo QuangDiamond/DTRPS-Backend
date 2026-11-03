@@ -23,7 +23,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Entity
 @Table(
     name = "business_listings",
-    indexes = {@Index(name = "idx_business_listings_approver", columnList = "approved_by")})
+    indexes = {
+      @Index(name = "idx_business_listings_approver", columnList = "approved_by"),
+      @Index(name = "idx_business_listings_business", columnList = "business_id")
+    })
 @Check(
     name = "chk_business_listing_status",
     constraints = "status IN ('PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED')")
@@ -36,7 +39,7 @@ public class BusinessListing {
   private Long listingId;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "business_id", nullable = false, unique = true)
+  @JoinColumn(name = "business_id", nullable = false)
   private BusinessProfile business;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)

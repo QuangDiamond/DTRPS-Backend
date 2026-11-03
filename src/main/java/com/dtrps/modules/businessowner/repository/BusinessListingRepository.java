@@ -22,7 +22,7 @@ public interface BusinessListingRepository
         "place.category.parent",
         "place.province"
       })
-  Optional<BusinessListing> findByBusinessUserUserId(Long userId);
+  List<BusinessListing> findByBusinessUserUserIdOrderByListingIdDesc(Long userId);
 
   @EntityGraph(
       attributePaths = {
@@ -44,8 +44,6 @@ public interface BusinessListingRepository
         "place.province"
       })
   Page<BusinessListing> findAll(Specification<BusinessListing> spec, Pageable pageable);
-
-  boolean existsByBusinessBusinessId(Long businessId);
 
   /** Listings (with their business) of the given places — places without one are admin POIs */
   @EntityGraph(attributePaths = {"business", "place"})

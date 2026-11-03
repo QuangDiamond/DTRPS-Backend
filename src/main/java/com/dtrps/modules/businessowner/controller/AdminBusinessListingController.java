@@ -34,15 +34,22 @@ public class AdminBusinessListingController {
     this.listingService = listingService;
   }
 
-  /** Newest first. {@code status}: PENDING, APPROVED, REJECTED or SUSPENDED. */
+  /**
+   * Newest first. {@code status}: PENDING, APPROVED, REJECTED or SUSPENDED; {@code businessId}
+   * limits the list to one partner's places.
+   */
   @GetMapping
   public PageResponse<BusinessListingResponse> list(
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) Long businessId,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size) {
     return listingService.list(
-        status, keyword, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "listingId")));
+        status,
+        keyword,
+        businessId,
+        PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "listingId")));
   }
 
   @GetMapping("/stats")
