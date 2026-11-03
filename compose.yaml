@@ -1,0 +1,20 @@
+name: dtrps
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dtrps
+      POSTGRES_USER: dtrps
+      POSTGRES_PASSWORD: local_dev_only
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dtrps -d dtrps"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  pgdata:

@@ -1,0 +1,39 @@
+spring:
+  # Defaults point at the team's shared DB on the server, so the app runs without any setup.
+  # This DB also serves the live API. Set DB_URL, DB_USER and DB_PASSWORD to use another one.
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://72.61.114.184:5433/dtrps}
+    username: ${DB_USER:dtrps}
+    password: ${DB_PASSWORD:a7d28d57312d4131b8504042ccee2ea77d50fea2e57b0e48}
+
+  jpa:
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+    # The default drops and recreates every unique constraint on each start, which would
+    # lock tables in the shared DB whenever someone runs the app. This only adds missing ones.
+    properties:
+      hibernate.schema_update.unique_constraint_strategy: RECREATE_QUIETLY
+    open-in-view: false
+
+  sql:
+    init:
+      mode: always
+
+server:
+  port: ${PORT:8080}
+
+app:
+  jwt:
+    # Dev-only default. The server sets its own JWT_SECRET, so tokens signed with this one are rejected there.
+    secret: ${JWT_SECRET:9f7f9de118532e5994d089e547420d2bf67a2ca560cbdee3a31e4cd2a8eb872d}
+    issuer: dtrps
+    access-ttl: ${JWT_ACCESS_TTL:15m}
+    refresh-ttl: ${JWT_REFRESH_TTL:30d}
+  auth:
+    rate-limit-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:20}
+    max-failed-logins: ${AUTH_MAX_FAILED_LOGINS:10}
+    login-lock-duration: ${AUTH_LOGIN_LOCK_DURATION:15m}
+  bootstrap:
+    admin-email: ${ADMIN_EMAIL:}
+    admin-password: ${ADMIN_PASSWORD:}
+    admin-name: ${ADMIN_NAME:System Admin}

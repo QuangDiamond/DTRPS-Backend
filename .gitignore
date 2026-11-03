@@ -1,0 +1,30 @@
+﻿# Maven
+target/
+effective-pom/
+effective-pom.xml
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tooling
+.ruff_cache/
