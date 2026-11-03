@@ -2,6 +2,7 @@ package com.dtrps.modules.poi.repository;
 
 import com.dtrps.modules.poi.entity.PlacePrice;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -13,4 +14,8 @@ public interface PlacePriceRepository extends JpaRepository<PlacePrice, Long> {
   @Modifying(flushAutomatically = true)
   @Query("delete from PlacePrice p where p.place.placeId = :placeId")
   void deleteByPlaceId(@Param("placeId") Long placeId);
+
+  Optional<PlacePrice> findByPriceIdAndPlacePlaceId(Long priceId, Long placeId);
+
+  long countByPlacePlaceId(Long placeId);
 }

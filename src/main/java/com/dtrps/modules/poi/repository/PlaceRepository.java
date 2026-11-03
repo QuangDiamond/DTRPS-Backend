@@ -31,4 +31,8 @@ public interface PlaceRepository
       "select c.parent.code, count(p) from Place p join p.category c"
           + " where c.parent is not null group by c.parent.code")
   List<Object[]> countByGroup();
+
+  /** [category id, count] for every category in use */
+  @Query("select p.category.categoryId, count(p) from Place p group by p.category.categoryId")
+  List<Object[]> countByCategory();
 }

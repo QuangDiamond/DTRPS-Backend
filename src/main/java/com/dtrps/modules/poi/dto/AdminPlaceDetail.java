@@ -2,7 +2,10 @@ package com.dtrps.modules.poi.dto;
 
 import java.util.List;
 
-/** Full place for the admin: the catalogue row plus content, hours, prices and photos. */
+/**
+ * Full place for the admin: the catalogue row plus content, hours, prices and photos. {@code
+ * editable} is false for partner places, which change only through partner revisions.
+ */
 public record AdminPlaceDetail(
     AdminPlaceSummary summary,
     String description,
@@ -10,6 +13,7 @@ public record AdminPlaceDetail(
     Double longitude,
     String phone,
     String website,
+    boolean editable,
     List<OpeningHourDto> openingHours,
-    List<PriceDto> prices,
-    List<ImageDto> images) {}
+    List<AdminPlacePrice> prices,
+    List<AdminPlaceImage> images) {}

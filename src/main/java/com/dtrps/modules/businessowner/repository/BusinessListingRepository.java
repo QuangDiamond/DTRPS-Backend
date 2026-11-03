@@ -49,5 +49,7 @@ public interface BusinessListingRepository
   @EntityGraph(attributePaths = {"business", "place"})
   List<BusinessListing> findByPlacePlaceIdIn(Collection<Long> placeIds);
 
+  boolean existsByPlacePlaceId(Long placeId);
+
   long countByStatus(String status);
 }

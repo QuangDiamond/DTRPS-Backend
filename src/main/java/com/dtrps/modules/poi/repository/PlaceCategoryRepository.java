@@ -12,4 +12,13 @@ public interface PlaceCategoryRepository extends JpaRepository<PlaceCategory, Lo
 
   @EntityGraph(attributePaths = "parent")
   List<PlaceCategory> findByStatusOrderByCategoryIdAsc(String status);
+
+  @EntityGraph(attributePaths = "parent")
+  List<PlaceCategory> findAllByOrderByCategoryIdAsc();
+
+  boolean existsByCodeIgnoreCase(String code);
+
+  boolean existsByNameIgnoreCase(String name);
+
+  boolean existsByNameIgnoreCaseAndCategoryIdNot(String name, Long categoryId);
 }

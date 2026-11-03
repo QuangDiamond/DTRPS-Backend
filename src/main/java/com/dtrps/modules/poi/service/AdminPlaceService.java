@@ -5,14 +5,16 @@ import com.dtrps.exception.ApiException;
 import com.dtrps.modules.businessowner.entity.BusinessListing;
 import com.dtrps.modules.businessowner.repository.BusinessListingRepository;
 import com.dtrps.modules.poi.dto.AdminPlaceDetail;
+import com.dtrps.modules.poi.dto.AdminPlaceImage;
+import com.dtrps.modules.poi.dto.AdminPlacePrice;
 import com.dtrps.modules.poi.dto.AdminPlaceStats;
 import com.dtrps.modules.poi.dto.AdminPlaceSummary;
-import com.dtrps.modules.poi.dto.PlaceDetails;
 import com.dtrps.modules.poi.dto.ReferenceItem;
 import com.dtrps.modules.poi.entity.Place;
 import com.dtrps.modules.poi.entity.PlaceCategory;
 import com.dtrps.modules.poi.entity.PlaceImage;
 import com.dtrps.modules.poi.repository.PlaceImageRepository;
+import com.dtrps.modules.poi.repository.PlacePriceRepository;
 import com.dtrps.modules.poi.repository.PlaceRepository;
 import com.dtrps.modules.poi.repository.PlaceReviewRepository;
 import jakarta.persistence.criteria.Join;
@@ -36,20 +38,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Admin catalogue of every place: platform POIs and partner places alike. Read-only for now —
- * partner places change through listing review and revisions.
+ * Admin catalogue of every place: platform POIs and partner places alike. Changes go through {@link
+ * AdminPlaceEditService}; partner places change only through listing review and revisions.
  */
 @Service
 public class AdminPlaceService {
   public static final String SOURCE_PARTNER = "PARTNER";
   public static final String SOURCE_ADMIN = "ADMIN";
-  static final String PLACE_NOT_FOUND = "Không tìm thấy địa điểm";
+  public static final String PLACE_NOT_FOUND = "Không tìm thấy địa điểm";
   private static final ZoneId VIETNAM = ZoneId.of("Asia/Ho_Chi_Minh");
 
   private record Rating(Double average, long count) {}
 
   private final PlaceRepository placeRepository;
   private final PlaceImageRepository imageRepository;
+  private final PlacePriceRepository priceRepository;
   private final PlaceReviewRepository reviewRepository;
   private final BusinessListingRepository listingRepository;
   private final PlaceDetailsService placeDetails;
@@ -58,12 +61,14 @@ public class AdminPlaceService {
   public AdminPlaceService(
       PlaceRepository placeRepository,
       PlaceImageRepository imageRepository,
+      PlacePriceRepository priceRepository,
       PlaceReviewRepository reviewRepository,
       BusinessListingRepository listingRepository,
       PlaceDetailsService placeDetails,
       Clock clock) {
     this.placeRepository = placeRepository;
     this.imageRepository = imageRepository;
+    this.priceRepository = priceRepository;
     this.reviewRepository = reviewRepository;
     this.listingRepository = listingRepository;
     this.placeDetails = placeDetails;
@@ -142,21 +147,35 @@ public class AdminPlaceService {
             .findWithDetailsByPlaceId(placeId)
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, PLACE_NOT_FOUND));
     List<Long> ids = List.of(placeId);
-    PlaceDetails details = placeDetails.read(placeId);
+    BusinessListing listing = listingsOf(ids).get(placeId);
+    List<PlaceImage> images = imagesOf(ids).getOrDefault(placeId, List.of());
     return new AdminPlaceDetail(
-        summary(
-            place,
-            listingsOf(ids).get(placeId),
-            imagesOf(ids).getOrDefault(placeId, List.of()),
-            ratingsOf(ids).get(placeId)),
+        summary(place, listing, images, ratingsOf(ids).get(placeId)),
         place.getDescription(),
         place.getLatitude(),
         place.getLongitude(),
         place.getPhone(),
         place.getWebsite(),
-        details.openingHours(),
-        details.prices(),
-        details.images());
+        listing == null,
+        placeDetails.read(placeId).openingHours(),
+        priceRepository.findByPlacePlaceIdOrderByPriceIdAsc(placeId).stream()
+            .map(
+                price ->
+                    new AdminPlacePrice(
+                        price.getPriceId(),
+                        price.getPriceType(),
+                        price.getAmount(),
+                        price.getCurrency(),
+                        price.getDescription()))
+            .toList(),
+        images.stream()
+            .map(
+                image ->
+                    new AdminPlaceImage(
+                        image.getImageId(),
+                        image.getImageUrl(),
+                        Boolean.TRUE.equals(image.getIsPrimary())))
+            .toList());
   }
 
   /** "This month" follows Vietnam time, where the platform operates. */
