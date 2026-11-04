@@ -6,6 +6,6 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PreferenceRepository extends JpaRepository<Preference, Long> {
-  @EntityGraph(attributePaths = {"interests", "transportModes", "specialNeeds"})
+  @EntityGraph(attributePaths = {"interests", "specialNeeds"})
   Optional<Preference> findByUserUserId(Long userId);
 }

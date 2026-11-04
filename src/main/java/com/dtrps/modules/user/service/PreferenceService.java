@@ -3,7 +3,6 @@ package com.dtrps.modules.user.service;
 import com.dtrps.exception.ApiException;
 import com.dtrps.modules.poi.repository.InterestRepository;
 import com.dtrps.modules.poi.repository.SpecialNeedRepository;
-import com.dtrps.modules.poi.repository.TransportModeRepository;
 import com.dtrps.modules.user.dto.PreferenceResponse;
 import com.dtrps.modules.user.dto.UpdatePreferencesRequest;
 import com.dtrps.modules.user.entity.Preference;
@@ -24,19 +23,16 @@ public class PreferenceService {
   private final PreferenceRepository preferenceRepository;
   private final UserRepository userRepository;
   private final InterestRepository interestRepository;
-  private final TransportModeRepository transportModeRepository;
   private final SpecialNeedRepository specialNeedRepository;
 
   public PreferenceService(
       PreferenceRepository preferenceRepository,
       UserRepository userRepository,
       InterestRepository interestRepository,
-      TransportModeRepository transportModeRepository,
       SpecialNeedRepository specialNeedRepository) {
     this.preferenceRepository = preferenceRepository;
     this.userRepository = userRepository;
     this.interestRepository = interestRepository;
-    this.transportModeRepository = transportModeRepository;
     this.specialNeedRepository = specialNeedRepository;
   }
 
@@ -56,8 +52,6 @@ public class PreferenceService {
     preference.setTravelStyle(request.travelStyle());
     preference.setNotes(request.notes());
     preference.setInterests(resolve(request.interests(), interestRepository::findByCodeIn));
-    preference.setTransportModes(
-        resolve(request.transportModes(), transportModeRepository::findByCodeIn));
     preference.setSpecialNeeds(
         resolve(request.specialNeeds(), specialNeedRepository::findByCodeIn));
     return PreferenceResponse.from(preferenceRepository.save(preference));
