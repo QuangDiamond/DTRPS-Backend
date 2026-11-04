@@ -2,7 +2,6 @@ package com.dtrps.modules.user.dto;
 
 import com.dtrps.modules.poi.entity.Interest;
 import com.dtrps.modules.poi.entity.SpecialNeed;
-import com.dtrps.modules.poi.entity.TransportMode;
 import com.dtrps.modules.user.entity.Preference;
 import java.util.List;
 
@@ -11,10 +10,9 @@ public record PreferenceResponse(
     String travelStyle,
     String notes,
     List<String> interests,
-    List<String> transportModes,
     List<String> specialNeeds) {
   public static PreferenceResponse empty() {
-    return new PreferenceResponse(null, null, null, List.of(), List.of(), List.of());
+    return new PreferenceResponse(null, null, null, List.of(), List.of());
   }
 
   public static PreferenceResponse from(Preference preference) {
@@ -23,7 +21,6 @@ public record PreferenceResponse(
         preference.getTravelStyle(),
         preference.getNotes(),
         preference.getInterests().stream().map(Interest::getCode).sorted().toList(),
-        preference.getTransportModes().stream().map(TransportMode::getCode).sorted().toList(),
         preference.getSpecialNeeds().stream().map(SpecialNeed::getCode).sorted().toList());
   }
 }

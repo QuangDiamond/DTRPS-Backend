@@ -1,3 +1,4 @@
+
 package com.dtrps.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,85 +26,115 @@ import org.springframework.web.util.UrlPathHelper;
 @Configuration
 @EnableMethodSecurity
 @EnableConfigurationProperties({
-  JwtProperties.class,
-  AuthProperties.class,
-  BootstrapAdminProperties.class
+        JwtProperties.class,
+        AuthProperties.class,
+        BootstrapAdminProperties.class
 })
 public class SecurityConfig {
-  private static final Set<String> PUBLIC_AUTH_PATHS =
-      Set.of("/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/api/auth/revoke");
-  private static final UrlPathHelper PATH_HELPER = new UrlPathHelper();
-  private static final int BCRYPT_STRENGTH = 12;
+    private static final Set<String> PUBLIC_AUTH_PATHS =
+            Set.of("/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/api/auth/revoke");
 
-  /** Compares the decoded path, because {@code /api/auth/%6Cogin} also reaches the login route. */
-  public static boolean isPublicAuthRequest(HttpServletRequest request) {
-    return HttpMethod.POST.matches(request.getMethod())
-        && PUBLIC_AUTH_PATHS.contains(decodedPath(request));
-  }
+    private static final UrlPathHelper PATH_HELPER = new UrlPathHelper();
+    private static final int BCRYPT_STRENGTH = 12;
 
-  public static String decodedPath(HttpServletRequest request) {
-    return PATH_HELPER.getPathWithinApplication(request);
-  }
+    /** Compares decoded paths for public auth endpoints. */
+    public static boolean isPublicAuthRequest(HttpServletRequest request) {
+        return HttpMethod.POST.matches(request.getMethod())
+                && PUBLIC_AUTH_PATHS.contains(decodedPath(request));
+    }
 
-  @Bean
-  SecurityFilterChain securityFilterChain(
-      HttpSecurity http,
-      RestAuthErrorHandler errorHandler,
-      JwtAuthenticationConverter jwtAuthenticationConverter,
-      BearerTokenResolver bearerTokenResolver,
-      AuthProperties authProperties,
-      ObjectMapper objectMapper)
-      throws Exception {
-    return http.csrf(AbstractHttpConfigurer::disable)
-        .cors(Customizer.withDefaults())
-        .sessionManagement(
-            session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        .authorizeHttpRequests(
-            requests ->
-                requests
-                    .requestMatchers(HttpMethod.POST, PUBLIC_AUTH_PATHS.toArray(String[]::new))
-                    .permitAll()
-                    .requestMatchers(
-                        HttpMethod.GET,
-                        "/api/health",
-                        "/swagger-ui.html",
-                        "/swagger-ui/**",
-                        "/v3/api-docs/**")
-                    .permitAll()
-                    .requestMatchers("/error")
-                    .permitAll()
-                    .anyRequest()
-                    .authenticated())
-        .oauth2ResourceServer(
-            server ->
-                server
-                    .bearerTokenResolver(bearerTokenResolver)
-                    .authenticationEntryPoint(errorHandler)
-                    .accessDeniedHandler(errorHandler)
-                    .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
-        .exceptionHandling(
-            exceptions ->
-                exceptions.authenticationEntryPoint(errorHandler).accessDeniedHandler(errorHandler))
-        .addFilterBefore(
-            new AuthRateLimitFilter(authProperties.rateLimitPerMinute(), objectMapper),
-            BearerTokenAuthenticationFilter.class)
-        .build();
-  }
+    public static String decodedPath(HttpServletRequest request) {
+        return PATH_HELPER.getPathWithinApplication(request);
+    }
 
-  /** An expired access token must not block the public auth calls that replace or end it. */
-  @Bean
-  BearerTokenResolver bearerTokenResolver() {
-    DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
-    return request -> isPublicAuthRequest(request) ? null : delegate.resolve(request);
-  }
+    @Bean
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            RestAuthErrorHandler errorHandler,
+            JwtAuthenticationConverter jwtAuthenticationConverter,
+            BearerTokenResolver bearerTokenResolver,
+            AuthProperties authProperties,
+            ObjectMapper objectMapper)
+            throws Exception {
 
-  @Bean
-  PasswordEncoder passwordEncoder() {
-    return new BCryptPasswordEncoder(BCRYPT_STRENGTH);
-  }
+        return http.csrf(AbstractHttpConfigurer::disable)
+                .cors(Customizer.withDefaults())
+                .sessionManagement(
+                        session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(
+                        requests ->
+                                requests
+                                        .requestMatchers(
+                                                HttpMethod.POST,
+                                                PUBLIC_AUTH_PATHS.toArray(String[]::new))
+                                        .permitAll()
 
-  @Bean
-  Clock clock() {
-    return Clock.systemUTC();
-  }
+                                        .requestMatchers(
+                                                HttpMethod.GET,
+                                                "/api/health",
+                                                "/swagger-ui.html",
+                                                "/swagger-ui/**",
+                                                "/v3/api-docs/**")
+                                        .permitAll()
+
+                                        // Admin APIs always require ADMIN role.
+                                        .requestMatchers("/api/admin/**")
+                                        .hasRole("ADMIN")
+
+                                        // Public read-only APIs.
+                                        .requestMatchers(
+                                                HttpMethod.GET,
+                                                "/api/reference/**",
+                                                "/api/places",
+                                                "/api/places/{id}")
+                                        .permitAll()
+
+                                        .requestMatchers("/error")
+                                        .permitAll()
+
+                                        // Other endpoints still require authentication.
+                                        .anyRequest()
+                                        .authenticated())
+                .oauth2ResourceServer(
+                        server ->
+                                server
+                                        .bearerTokenResolver(bearerTokenResolver)
+                                        .authenticationEntryPoint(errorHandler)
+                                        .accessDeniedHandler(errorHandler)
+                                        .jwt(
+                                                jwt -> jwt.jwtAuthenticationConverter(
+                                                        jwtAuthenticationConverter)))
+                .exceptionHandling(
+                        exceptions ->
+                                exceptions
+                                        .authenticationEntryPoint(errorHandler)
+                                        .accessDeniedHandler(errorHandler))
+                .addFilterBefore(
+                        new AuthRateLimitFilter(
+                                authProperties.rateLimitPerMinute(),
+                                objectMapper),
+                        BearerTokenAuthenticationFilter.class)
+                .build();
+    }
+
+    /** Public authentication calls can work with expired access tokens. */
+    @Bean
+    BearerTokenResolver bearerTokenResolver() {
+        DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
+
+        return request ->
+                isPublicAuthRequest(request)
+                        ? null
+                        : delegate.resolve(request);
+    }
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(BCRYPT_STRENGTH);
+    }
+
+    @Bean
+    Clock clock() {
+        return Clock.systemUTC();
+    }
 }

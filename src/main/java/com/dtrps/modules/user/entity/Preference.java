@@ -2,7 +2,6 @@ package com.dtrps.modules.user.entity;
 
 import com.dtrps.modules.poi.entity.Interest;
 import com.dtrps.modules.poi.entity.SpecialNeed;
-import com.dtrps.modules.poi.entity.TransportMode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -65,14 +64,6 @@ public class Preference {
       joinColumns = @JoinColumn(name = "preference_id"),
       inverseJoinColumns = @JoinColumn(name = "interest_id"))
   private Set<Interest> interests = new HashSet<>();
-
-  @ManyToMany(fetch = FetchType.LAZY)
-  @JoinTable(
-      name = "preference_transport_modes",
-      indexes = @Index(name = "idx_preference_transport_mode", columnList = "transport_mode_id"),
-      joinColumns = @JoinColumn(name = "preference_id"),
-      inverseJoinColumns = @JoinColumn(name = "transport_mode_id"))
-  private Set<TransportMode> transportModes = new HashSet<>();
 
   @ManyToMany(fetch = FetchType.LAZY)
   @JoinTable(
