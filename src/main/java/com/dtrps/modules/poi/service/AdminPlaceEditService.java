@@ -52,7 +52,10 @@ public class AdminPlaceEditService {
   private static final int MAX_PRICES = 20;
   private static final String TOO_MANY_PRICES = "Tối đa " + MAX_PRICES + " mức giá";
   private static final String DEFAULT_CURRENCY = "VND";
-  private static final String ACTIVE = "ACTIVE";
+
+  /** New places stay hidden until the admin publishes them (status ACTIVE) */
+  private static final String DRAFT = "DRAFT";
+
   private static final int WEEK = 7;
 
   private final PlaceRepository placeRepository;
@@ -96,7 +99,7 @@ public class AdminPlaceEditService {
     PlaceDetails details = normalize(request.openingHours(), request.prices(), request.images());
     Place place = new Place();
     applyBasics(place, request);
-    place.setStatus(request.status() == null ? ACTIVE : request.status());
+    place.setStatus(request.status() == null ? DRAFT : request.status());
     placeRepository.save(place);
     placeDetails.replace(place, details);
     placeRepository.flush();

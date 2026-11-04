@@ -35,4 +35,6 @@ public interface PlaceRepository
   /** [category id, count] for every category in use */
   @Query("select p.category.categoryId, count(p) from Place p group by p.category.categoryId")
   List<Object[]> countByCategory();
+
+  boolean existsByCategoryCategoryId(Long categoryId);
 }

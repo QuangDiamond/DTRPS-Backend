@@ -12,7 +12,7 @@ import java.util.List;
 /**
  * A place the admin creates or edits directly (no partner, no review). On create, missing lists
  * mean none; on update, a missing list (null) keeps what the place has. Opening hours, when given,
- * cover all 7 days. {@code status} defaults to ACTIVE on create and is kept on update.
+ * cover all 7 days. {@code status} defaults to DRAFT on create and is kept on update.
  */
 public record AdminPlaceRequest(
     @NotBlank(message = "Vui lòng nhập tên địa điểm")

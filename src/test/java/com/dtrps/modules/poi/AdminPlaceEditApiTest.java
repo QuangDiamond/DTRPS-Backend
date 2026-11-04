@@ -14,9 +14,13 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class AdminPlaceEditApiTest extends ApiTestBase {
   private static final String PLACES = "/api/admin/places";
+
+  @Autowired private JdbcTemplate jdbcTemplate;
 
   private static Map<String, Object> basics(String name) {
     Map<String, Object> body = new HashMap<>();
@@ -54,16 +58,41 @@ class AdminPlaceEditApiTest extends ApiTestBase {
   }
 
   @Test
-  @DisplayName("admin creates a public place directly, with hours, prices and photos")
-  void create_isPublicAdminPlace() throws Exception {
+  @DisplayName("admin creates a place directly (DRAFT by default) with hours, prices and photos")
+  void create_adminPlace() throws Exception {
     JsonNode place = create(adminToken());
 
     assertThat(place.get("summary").get("source").asText()).isEqualTo("ADMIN");
-    assertThat(place.get("summary").get("status").asText()).isEqualTo("ACTIVE");
+    assertThat(place.get("summary").get("status").asText()).isEqualTo("DRAFT");
     assertThat(place.get("editable").asBoolean()).isTrue();
     assertThat(place.get("openingHours")).hasSize(7);
     assertThat(place.get("prices").get(0).get("currency").asText()).isEqualTo("VND");
     assertThat(place.get("images").get(0).get("primary").asBoolean()).isTrue();
+  }
+
+  @Test
+  @DisplayName("creating, editing and changing status are written to audit_logs")
+  void changes_areAudited() throws Exception {
+    String admin = adminToken();
+    Map<String, Object> body = basics("POI audit " + UUID.randomUUID().toString().substring(0, 8));
+    body.put("status", "ACTIVE");
+    JsonNode place = json(postAs(PLACES, admin, body).andExpect(status().isCreated()));
+    assertThat(place.get("summary").get("status").asText()).isEqualTo("ACTIVE");
+    long id = place.get("summary").get("id").asLong();
+
+    putAs(PLACES + "/" + id, admin, basics("POI audit đã sửa")).andExpect(status().isOk());
+    putAs(PLACES + "/" + id + "/status", admin, Map.of("status", "MAINTENANCE"))
+        .andExpect(status().isOk());
+
+    List<Map<String, Object>> logs =
+        jdbcTemplate.queryForList(
+            "SELECT action, description FROM audit_logs WHERE entity_name = 'places'"
+                + " AND entity_id = ? ORDER BY log_id",
+            id);
+    assertThat(logs)
+        .extracting(row -> row.get("action"))
+        .containsExactly("PLACE_CREATED", "PLACE_UPDATED", "PLACE_STATUS_CHANGED");
+    assertThat(logs.get(2).get("description")).isEqualTo("ACTIVE -> MAINTENANCE");
   }
 
   @Test
