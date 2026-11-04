@@ -145,6 +145,14 @@ public class UserService {
     return UserResponse.from(user);
   }
 
+  /** Sets (or with null removes) the profile picture; the image is already uploaded. */
+  @Transactional
+  public UserResponse updateAvatar(Long userId, String avatarUrl) {
+    User user = findUser(userId);
+    user.setAvatarUrl(avatarUrl);
+    return UserResponse.from(user);
+  }
+
   /** A suspended user is cut off at the next refresh, once the access token expires. */
   @Transactional
   public UserResponse updateStatus(Long adminId, Long userId, String status) {
