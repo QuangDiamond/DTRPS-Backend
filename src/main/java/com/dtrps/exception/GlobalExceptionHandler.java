@@ -1,5 +1,7 @@
 package com.dtrps.exception;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -44,6 +46,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   public ResponseEntity<ErrorResponse> handleAuthentication(AuthenticationException ex) {
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
         .body(ErrorResponse.of(UNAUTHORIZED_MESSAGE));
+  }
+
+  /**
+   * A query or path parameter failed its constraint (controllers marked {@code @Validated}), e.g.
+   * {@code ?size=1000}. Reported per parameter like body field errors.
+   */
+  @ExceptionHandler(ConstraintViolationException.class)
+  public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
+    Map<String, String> errors = new LinkedHashMap<>();
+    for (ConstraintViolation<?> violation : ex.getConstraintViolations()) {
+      String path = violation.getPropertyPath().toString();
+      errors.putIfAbsent(path.substring(path.lastIndexOf('.') + 1), violation.getMessage());
+    }
+    String message = errors.size() == 1 ? errors.values().iterator().next() : INVALID_REQUEST;
+    return ResponseEntity.badRequest().body(new ErrorResponse(message, Map.copyOf(errors)));
   }
 
   @ExceptionHandler(Exception.class)

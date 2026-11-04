@@ -91,6 +91,10 @@ class AdminPlaceApiTest extends ApiTestBase {
         .andExpect(jsonPath("$.total").value(0));
     getAs(PLACES + "?keyword=" + name + "&group=fnb", admin)
         .andExpect(jsonPath("$.total").value(0));
+    getAs(PLACES + "?keyword=" + name + "&group=lodging&category=homestay", admin)
+        .andExpect(jsonPath("$.total").value(1));
+    getAs(PLACES + "?keyword=" + name + "&category=hotel", admin)
+        .andExpect(jsonPath("$.total").value(0));
   }
 
   @Test

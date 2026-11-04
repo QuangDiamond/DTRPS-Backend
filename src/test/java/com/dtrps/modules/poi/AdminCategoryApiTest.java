@@ -74,6 +74,25 @@ class AdminCategoryApiTest extends ApiTestBase {
   }
 
   @Test
+  @DisplayName("a stray top-level row is hidden everywhere and cannot take types")
+  void strayGroup_isIgnored() throws Exception {
+    jdbcTemplate.update(
+        "INSERT INTO place_categories (code, name, status) VALUES ('cave_stray', 'Nhóm lạc', 'ACTIVE')");
+    String admin = adminToken();
+
+    getAs("/api/reference/categories", admin)
+        .andExpect(jsonPath("$.length()").value(4))
+        .andExpect(jsonPath("$[0].code").value("lodging"))
+        .andExpect(jsonPath("$[3].code").value("shopping"));
+    getAs(CATEGORIES, admin)
+        .andExpect(jsonPath("$.length()").value(4))
+        .andExpect(jsonPath("$[1].code").value("fnb"));
+    Map<String, Object> body = type("cave_child", "Loại trong nhóm lạc");
+    body.put("groupCode", "cave_stray");
+    postAs(CATEGORIES, admin, body).andExpect(status().isBadRequest());
+  }
+
+  @Test
   @DisplayName("only admins manage types")
   void adminOnly() throws Exception {
     getAs(CATEGORIES, travellerToken()).andExpect(status().isForbidden());

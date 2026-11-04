@@ -56,6 +56,7 @@ public class AdminPlaceController {
   public PageResponse<AdminPlaceSummary> list(
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false) String group,
+      @RequestParam(required = false) String category,
       @RequestParam(required = false) String province,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String source,
@@ -64,6 +65,7 @@ public class AdminPlaceController {
     return placeService.list(
         keyword,
         group,
+        category,
         province,
         status,
         source,

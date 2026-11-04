@@ -9,6 +9,7 @@ import com.dtrps.modules.poi.entity.PlaceCategory;
 import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
 import com.dtrps.modules.poi.repository.PlaceRepository;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,7 +50,10 @@ public class AdminCategoryService {
     this.auditService = auditService;
   }
 
-  /** Groups in seed order, each with all of its types (inactive included) and their usage. */
+  /**
+   * The 4 service groups in their fixed order, each with all of its types (inactive included) and
+   * their usage. Stray top-level rows outside the 4 groups are not shown.
+   */
   @Transactional(readOnly = true)
   public List<AdminCategoryGroup> list() {
     Map<Long, Long> usage = new HashMap<>();
@@ -70,6 +74,8 @@ public class AdminCategoryService {
       }
     }
     return groups.values().stream()
+        .filter(group -> ReferenceDataService.GROUP_ORDER.contains(group.getCode()))
+        .sorted(Comparator.comparingInt(group -> ReferenceDataService.groupRank(group.getCode())))
         .map(
             group ->
                 new AdminCategoryGroup(
@@ -148,6 +154,7 @@ public class AdminCategoryService {
     return categoryRepository
         .findByCode(code.trim())
         .filter(found -> found.getParent() == null)
+        .filter(found -> ReferenceDataService.GROUP_ORDER.contains(found.getCode()))
         .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, UNKNOWN_GROUP));
   }
 

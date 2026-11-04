@@ -20,6 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReferenceDataService {
   public static final String ACTIVE = "ACTIVE";
 
+  /** The 4 service groups, in the order every client shows them */
+  public static final List<String> GROUP_ORDER =
+      List.of("lodging", "fnb", "attraction", "shopping");
+
   private final ProvinceRepository provinceRepository;
   private final PlaceCategoryRepository categoryRepository;
 
@@ -39,7 +43,10 @@ public class ReferenceDataService {
         .toList();
   }
 
-  /** Active groups in seed order, each with its active subtypes. */
+  /**
+   * Active groups in {@link #GROUP_ORDER}, each with its active subtypes. A group without any
+   * active subtype is left out: a place cannot be registered under it.
+   */
   @Transactional(readOnly = true)
   public List<CategoryGroupResponse> categories() {
     List<PlaceCategory> active = categoryRepository.findByStatusOrderByCategoryIdAsc(ACTIVE);
@@ -55,6 +62,8 @@ public class ReferenceDataService {
       }
     }
     return groups.stream()
+        .filter(group -> subtypes.containsKey(group.getCategoryId()))
+        .sorted(Comparator.comparingInt(group -> groupRank(group.getCode())))
         .map(
             group ->
                 new CategoryGroupResponse(
@@ -62,5 +71,11 @@ public class ReferenceDataService {
                     group.getName(),
                     subtypes.getOrDefault(group.getCategoryId(), List.of())))
         .toList();
+  }
+
+  /** Known groups first in their fixed order, anything else after them */
+  public static int groupRank(String code) {
+    int rank = GROUP_ORDER.indexOf(code);
+    return rank < 0 ? GROUP_ORDER.size() : rank;
   }
 }

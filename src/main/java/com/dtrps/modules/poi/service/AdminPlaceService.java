@@ -76,13 +76,15 @@ public class AdminPlaceService {
   }
 
   /**
-   * Filters are optional. {@code group}/{@code province} are reference codes, {@code status} a
-   * place status, {@code source} PARTNER or ADMIN.
+   * Filters are optional. {@code group} (service group), {@code category} (type within a group) and
+   * {@code province} are reference codes, {@code status} a place status, {@code source} PARTNER or
+   * ADMIN.
    */
   @Transactional(readOnly = true)
   public PageResponse<AdminPlaceSummary> list(
       String keyword,
       String group,
+      String category,
       String province,
       String status,
       String source,
@@ -101,9 +103,14 @@ public class AdminPlaceService {
       spec =
           spec.and(
               (root, query, cb) -> {
-                Join<Place, PlaceCategory> category = root.join("category");
-                return cb.equal(category.get("parent").get("code"), group.trim());
+                Join<Place, PlaceCategory> type = root.join("category");
+                return cb.equal(type.get("parent").get("code"), group.trim());
               });
+    }
+    if (hasText(category)) {
+      spec =
+          spec.and(
+              (root, query, cb) -> cb.equal(root.get("category").get("code"), category.trim()));
     }
     if (hasText(province)) {
       spec =
