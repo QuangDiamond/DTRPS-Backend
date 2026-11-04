@@ -3,6 +3,7 @@ package com.dtrps.modules.poi.controller;
 
 import com.dtrps.modules.poi.dto.CategoryGroupResponse;
 import com.dtrps.modules.poi.dto.ProvinceResponse;
+import com.dtrps.modules.poi.dto.ReferenceItem;
 import com.dtrps.modules.poi.service.ReferenceDataService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,5 +30,15 @@ public class ReferenceController {
     @GetMapping("/categories")
     public List<CategoryGroupResponse> categories() {
         return referenceDataService.categories();
+    }
+
+    @GetMapping("/interests")
+    public List<ReferenceItem> interests() {
+        return referenceDataService.interests();
+    }
+
+    @GetMapping("/special-needs")
+    public List<ReferenceItem> specialNeeds() {
+        return referenceDataService.specialNeeds();
     }
 }

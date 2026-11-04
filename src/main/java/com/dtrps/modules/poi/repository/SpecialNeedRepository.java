@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface SpecialNeedRepository extends JpaRepository<SpecialNeed, Long> {
   List<SpecialNeed> findByCodeIn(Collection<String> codes);
+
+  List<SpecialNeed> findAllByOrderBySpecialNeedIdAsc();
 }

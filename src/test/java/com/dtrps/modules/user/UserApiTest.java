@@ -80,7 +80,6 @@ class UserApiTest extends ApiTestBase {
                 "budgetLevel", "MEDIUM",
                 "travelStyle", "RELAX",
                 "interests", List.of("food", "nature"),
-                "transportModes", List.of("plane", "bus"),
                 "specialNeeds", List.of("kids")))
         .andExpect(status().isOk());
 
@@ -93,8 +92,7 @@ class UserApiTest extends ApiTestBase {
     getAs("/api/users/me/preferences", token)
         .andExpect(jsonPath("$.budgetLevel").value("LUXURY"))
         .andExpect(jsonPath("$.interests.length()").value(1))
-        .andExpect(jsonPath("$.interests[0]").value("beach"))
-        .andExpect(jsonPath("$.transportModes").isEmpty());
+        .andExpect(jsonPath("$.interests[0]").value("beach"));
   }
 
   @Test

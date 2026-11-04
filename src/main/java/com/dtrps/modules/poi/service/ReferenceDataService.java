@@ -5,8 +5,10 @@ import com.dtrps.modules.poi.dto.CategoryGroupResponse;
 import com.dtrps.modules.poi.dto.ReferenceItem;
 import com.dtrps.modules.poi.dto.ProvinceResponse;
 import com.dtrps.modules.poi.entity.PlaceCategory;
+import com.dtrps.modules.poi.repository.InterestRepository;
 import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
 import com.dtrps.modules.poi.repository.ProvinceRepository;
+import com.dtrps.modules.poi.repository.SpecialNeedRepository;
 import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -25,12 +27,18 @@ public class ReferenceDataService {
 
     private final ProvinceRepository provinceRepository;
     private final PlaceCategoryRepository categoryRepository;
+    private final InterestRepository interestRepository;
+    private final SpecialNeedRepository specialNeedRepository;
 
     public ReferenceDataService(
             ProvinceRepository provinceRepository,
-            PlaceCategoryRepository categoryRepository) {
+            PlaceCategoryRepository categoryRepository,
+            InterestRepository interestRepository,
+            SpecialNeedRepository specialNeedRepository) {
         this.provinceRepository = provinceRepository;
         this.categoryRepository = categoryRepository;
+        this.interestRepository = interestRepository;
+        this.specialNeedRepository = specialNeedRepository;
     }
 
     /** Returns provinces sorted by Vietnamese display name. */
@@ -88,6 +96,22 @@ public class ReferenceDataService {
                                         subtypes.getOrDefault(
                                                 group.getCategoryId(),
                                                 List.of())))
+                .toList();
+    }
+
+    /** Travel interests for the traveller's preferences screen and search filters. */
+    @Transactional(readOnly = true)
+    public List<ReferenceItem> interests() {
+        return interestRepository.findAllByOrderByInterestIdAsc().stream()
+                .map(interest -> new ReferenceItem(interest.getCode(), interest.getName()))
+                .toList();
+    }
+
+    /** Special needs (dietary, accessibility…) for the traveller's preferences screen. */
+    @Transactional(readOnly = true)
+    public List<ReferenceItem> specialNeeds() {
+        return specialNeedRepository.findAllByOrderBySpecialNeedIdAsc().stream()
+                .map(need -> new ReferenceItem(need.getCode(), need.getName()))
                 .toList();
     }
 }
