@@ -2,6 +2,7 @@ package com.dtrps.modules.businessowner.dto;
 
 import com.dtrps.modules.poi.dto.ImageDto;
 import com.dtrps.modules.poi.dto.OpeningHourDto;
+import com.dtrps.modules.poi.dto.PlaceTypes;
 import com.dtrps.modules.poi.dto.PriceDto;
 import com.dtrps.modules.poi.dto.ReferenceItem;
 import java.util.List;
@@ -15,6 +16,9 @@ public record ProposedPlace(
     Double longitude,
     ReferenceItem group,
     ReferenceItem category,
+    /** Every group / type of the place, the main one first */
+    List<ReferenceItem> groups,
+    List<PlaceTypes.Type> categories,
     ReferenceItem province,
     String phone,
     String website,

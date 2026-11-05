@@ -9,6 +9,7 @@ import com.dtrps.modules.poi.dto.AdminPlaceImage;
 import com.dtrps.modules.poi.dto.AdminPlacePrice;
 import com.dtrps.modules.poi.dto.AdminPlaceStats;
 import com.dtrps.modules.poi.dto.AdminPlaceSummary;
+import com.dtrps.modules.poi.dto.PlaceTypes;
 import com.dtrps.modules.poi.dto.ReferenceItem;
 import com.dtrps.modules.poi.entity.Place;
 import com.dtrps.modules.poi.entity.PlaceCategory;
@@ -17,7 +18,6 @@ import com.dtrps.modules.poi.repository.PlaceImageRepository;
 import com.dtrps.modules.poi.repository.PlacePriceRepository;
 import com.dtrps.modules.poi.repository.PlaceRepository;
 import com.dtrps.modules.poi.repository.PlaceReviewRepository;
-import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Subquery;
 import java.time.Clock;
 import java.time.Instant;
@@ -102,15 +102,13 @@ public class AdminPlaceService {
     if (hasText(group)) {
       spec =
           spec.and(
-              (root, query, cb) -> {
-                Join<Place, PlaceCategory> type = root.join("category");
-                return cb.equal(type.get("parent").get("code"), group.trim());
-              });
+              (root, query, cb) ->
+                  PlaceTypeFilter.hasType(root, query, cb, "parent", group.trim()));
     }
     if (hasText(category)) {
       spec =
           spec.and(
-              (root, query, cb) -> cb.equal(root.get("category").get("code"), category.trim()));
+              (root, query, cb) -> PlaceTypeFilter.hasType(root, query, cb, null, category.trim()));
     }
     if (hasText(province)) {
       spec =
@@ -241,11 +239,14 @@ public class AdminPlaceService {
       Place place, BusinessListing listing, List<PlaceImage> images, Rating rating) {
     PlaceCategory category = place.getCategory();
     PlaceCategory group = category == null ? null : category.getParent();
+    PlaceTypes types = PlaceTypes.of(category, place.getCategories());
     return new AdminPlaceSummary(
         place.getPlaceId(),
         place.getName(),
         group == null ? null : new ReferenceItem(group.getCode(), group.getName()),
         category == null ? null : new ReferenceItem(category.getCode(), category.getName()),
+        types.groups(),
+        types.categories(),
         place.getProvince() == null
             ? null
             : new ReferenceItem(place.getProvince().getCode(), place.getProvince().getName()),

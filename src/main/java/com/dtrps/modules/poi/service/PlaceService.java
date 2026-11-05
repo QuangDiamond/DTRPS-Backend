@@ -4,6 +4,7 @@ import com.dtrps.common.PageResponse;
 import com.dtrps.exception.ApiException;
 import com.dtrps.modules.poi.dto.PlaceDetailResponse;
 import com.dtrps.modules.poi.dto.PlaceSummaryResponse;
+import com.dtrps.modules.poi.dto.PlaceTypes;
 import com.dtrps.modules.poi.dto.ReferenceItem;
 import com.dtrps.modules.poi.entity.Place;
 import com.dtrps.modules.poi.entity.PlaceCategory;
@@ -11,7 +12,6 @@ import com.dtrps.modules.poi.entity.PlaceImage;
 import com.dtrps.modules.poi.repository.PlaceImageRepository;
 import com.dtrps.modules.poi.repository.PlaceRepository;
 import com.dtrps.modules.poi.repository.PlaceReviewRepository;
-import jakarta.persistence.criteria.Join;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -64,10 +64,7 @@ public class PlaceService {
       String code = category.trim();
       spec =
           spec.and(
-              (root, query, cb) -> {
-                Join<Place, PlaceCategory> join = root.join("category");
-                return cb.equal(join.get("code"), code);
-              });
+              (root, query, cb) -> PlaceTypeFilter.hasType(root, query, cb, null, code));
     }
     if (hasText(province)) {
       String code = province.trim();
@@ -137,11 +134,14 @@ public class PlaceService {
       Place place, List<PlaceImage> images, Rating rating) {
     PlaceCategory category = place.getCategory();
     PlaceCategory group = category == null ? null : category.getParent();
+    PlaceTypes types = PlaceTypes.of(category, place.getCategories());
     return new PlaceSummaryResponse(
         place.getPlaceId(),
         place.getName(),
         group == null ? null : new ReferenceItem(group.getCode(), group.getName()),
         category == null ? null : new ReferenceItem(category.getCode(), category.getName()),
+        types.groups(),
+        types.categories(),
         place.getProvince() == null
             ? null
             : new ReferenceItem(place.getProvince().getCode(), place.getProvince().getName()),

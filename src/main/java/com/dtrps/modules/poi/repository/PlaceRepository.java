@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface PlaceRepository
     extends JpaRepository<Place, Long>, JpaSpecificationExecutor<Place> {
@@ -32,9 +33,16 @@ public interface PlaceRepository
           + " where c.parent is not null group by c.parent.code")
   List<Object[]> countByGroup();
 
-  /** [category id, count] for every category in use */
-  @Query("select p.category.categoryId, count(p) from Place p group by p.category.categoryId")
+  /** [category id, count] for every type in use, as a place's main type or one of its others */
+  @Query(
+      "select c.categoryId, count(distinct p) from Place p join p.categories c"
+          + " group by c.categoryId")
   List<Object[]> countByCategory();
 
-  boolean existsByCategoryCategoryId(Long categoryId);
+  /** A place uses the type, as its main type or one of its others. */
+  @Query(
+      "select count(p) > 0 from Place p where p.category.categoryId = :categoryId"
+          + " or exists (select 1 from Place q join q.categories c"
+          + " where q = p and c.categoryId = :categoryId)")
+  boolean usesCategory(@Param("categoryId") Long categoryId);
 }

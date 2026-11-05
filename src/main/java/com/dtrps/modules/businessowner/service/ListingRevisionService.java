@@ -13,6 +13,7 @@ import com.dtrps.modules.businessowner.entity.BusinessListing;
 import com.dtrps.modules.businessowner.entity.BusinessListingRevision;
 import com.dtrps.modules.businessowner.repository.BusinessListingRevisionRepository;
 import com.dtrps.modules.poi.dto.PlaceDetails;
+import com.dtrps.modules.poi.dto.PlaceTypes;
 import com.dtrps.modules.poi.dto.ReferenceItem;
 import com.dtrps.modules.poi.entity.Place;
 import com.dtrps.modules.poi.entity.PlaceCategory;
@@ -72,6 +73,7 @@ public class ListingRevisionService {
   private final AuditService auditService;
   private final ObjectMapper objectMapper;
   private final Clock clock;
+  private final PartnerNotices notices;
 
   public ListingRevisionService(
       BusinessListingService listingService,
@@ -81,7 +83,8 @@ public class ListingRevisionService {
       UserRepository userRepository,
       AuditService auditService,
       ObjectMapper objectMapper,
-      Clock clock) {
+      Clock clock,
+      PartnerNotices notices) {
     this.listingService = listingService;
     this.revisionRepository = revisionRepository;
     this.references = references;
@@ -90,6 +93,7 @@ public class ListingRevisionService {
     this.auditService = auditService;
     this.objectMapper = objectMapper;
     this.clock = clock;
+    this.notices = notices;
   }
 
   // ===== Business owner =====
@@ -110,7 +114,9 @@ public class ListingRevisionService {
     BusinessListingRevision revision = new BusinessListingRevision();
     revision.setListing(listing);
     revision.setProposedBy(userRepository.getReferenceById(userId));
-    revision.setCategory(references.subtype(request.categoryCode()));
+    List<PlaceCategory> types = references.types(request.categoryCodes(), request.categoryCode());
+    revision.setCategory(types.get(0));
+    revision.getCategories().addAll(types);
     revision.setProvince(references.province(request.provinceCode()));
     revision.setName(request.name().trim());
     revision.setDescription(BusinessListingService.blankToNull(request.description()));
@@ -128,6 +134,7 @@ public class ListingRevisionService {
     revision.setStatus(PENDING);
     revisionRepository.saveAndFlush(revision);
     auditService.record(userId, ACTION_PROPOSED, AUDIT_ENTITY, revision.getRevisionId());
+    notices.revisionSubmitted(revision);
     return toResponse(revision, false);
   }
 
@@ -153,6 +160,7 @@ public class ListingRevisionService {
     requirePending(revision);
     revision.setStatus(CANCELLED);
     auditService.record(userId, ACTION_CANCELLED, AUDIT_ENTITY, revisionId);
+    notices.revisionCancelled(revision);
     return toResponse(revision, false);
   }
 
@@ -206,6 +214,9 @@ public class ListingRevisionService {
     place.setLatitude(revision.getLatitude());
     place.setLongitude(revision.getLongitude());
     place.setCategory(revision.getCategory());
+    place.getCategories().clear();
+    place.getCategories().add(revision.getCategory());
+    place.getCategories().addAll(revision.getCategories());
     place.setPlaceType(revision.getCategory().getCode());
     place.setProvince(revision.getProvince());
     place.setPhone(payload.phone());
@@ -217,6 +228,7 @@ public class ListingRevisionService {
     revision.setReviewNote(BusinessListingService.blankToNull(note));
     revisionRepository.flush();
     auditService.record(adminId, ACTION_APPROVED, AUDIT_ENTITY, revisionId);
+    notices.revisionDecided(revision, true, null);
     return new RevisionReviewDetail(toResponse(revision, true), listingService.toResponse(listing));
   }
 
@@ -231,6 +243,7 @@ public class ListingRevisionService {
     revision.setReviewNote(request.note().trim());
     auditService.record(
         adminId, ACTION_REJECTED, AUDIT_ENTITY, revisionId, request.partnerFeedback().trim());
+    notices.revisionDecided(revision, false, request.partnerFeedback().trim());
     return toResponse(revision, true);
   }
 
@@ -285,6 +298,7 @@ public class ListingRevisionService {
     RevisionPayload payload = readPayload(revision);
     PlaceCategory category = revision.getCategory();
     PlaceCategory group = category == null ? null : category.getParent();
+    PlaceTypes types = PlaceTypes.of(category, revision.getCategories());
     ProposedPlace proposed =
         new ProposedPlace(
             revision.getName(),
@@ -294,6 +308,8 @@ public class ListingRevisionService {
             revision.getLongitude(),
             group == null ? null : new ReferenceItem(group.getCode(), group.getName()),
             category == null ? null : new ReferenceItem(category.getCode(), category.getName()),
+            types.groups(),
+            types.categories(),
             revision.getProvince() == null
                 ? null
                 : new ReferenceItem(

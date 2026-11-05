@@ -2,6 +2,7 @@
 package com.dtrps.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.util.Set;
@@ -64,6 +65,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(
                         requests ->
                                 requests
+                                        // Event streams (SSE) finish on an async dispatch; the
+                                        // request was already authenticated when it started.
+                                        .dispatcherTypeMatchers(DispatcherType.ASYNC)
+                                        .permitAll()
+
                                         .requestMatchers(
                                                 HttpMethod.POST,
                                                 PUBLIC_AUTH_PATHS.toArray(String[]::new))

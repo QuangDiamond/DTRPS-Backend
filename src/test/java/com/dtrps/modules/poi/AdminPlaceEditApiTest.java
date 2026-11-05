@@ -96,6 +96,46 @@ class AdminPlaceEditApiTest extends ApiTestBase {
   }
 
   @Test
+  @DisplayName(
+      "a place may have many types across groups; the first is the main one; filters match any")
+  void manyTypes_areSavedAndFiltered() throws Exception {
+    String admin = adminToken();
+    String name = "POI nhiều loại " + UUID.randomUUID().toString().substring(0, 8);
+    Map<String, Object> body = basics(name);
+    body.remove("categoryCode");
+    postAs(PLACES, admin, body).andExpect(status().isBadRequest());
+
+    body.put("categoryCodes", List.of("resort", "restaurant", "barPub", "resort"));
+    body.put("status", "ACTIVE");
+    JsonNode summary = json(postAs(PLACES, admin, body).andExpect(status().isCreated()));
+    summary = summary.get("summary");
+    assertThat(summary.get("category").get("code").asText()).isEqualTo("resort");
+    assertThat(summary.get("categories"))
+        .extracting(type -> type.get("code").asText())
+        .startsWith("resort")
+        .containsExactlyInAnyOrder("resort", "restaurant", "barPub");
+    assertThat(summary.get("groups"))
+        .extracting(group -> group.get("code").asText())
+        .containsExactly("lodging", "fnb");
+    long id = summary.get("id").asLong();
+
+    getAs(PLACES + "?group=fnb&keyword=" + name, admin)
+        .andExpect(jsonPath("$.total").value(1))
+        .andExpect(jsonPath("$.items[0].id").value(id));
+    getAs("/api/places?category=barPub&keyword=" + name, null)
+        .andExpect(jsonPath("$.total").value(1))
+        .andExpect(jsonPath("$.items[0].categories.length()").value(3));
+    getAs("/api/places?category=villa&keyword=" + name, null)
+        .andExpect(jsonPath("$.total").value(0));
+
+    // Gửi lại một loại hình = chỉ còn loại hình đó
+    putAs(PLACES + "/" + id, admin, basics(name))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.summary.category.code").value("homestay"))
+        .andExpect(jsonPath("$.summary.categories.length()").value(1));
+  }
+
+  @Test
   @DisplayName("opening hours must cover all 7 days")
   void hours_needFullWeek() throws Exception {
     String admin = adminToken();
