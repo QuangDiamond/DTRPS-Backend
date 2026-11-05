@@ -103,9 +103,12 @@ public class AuthService {
     tokenService.revoke(refreshToken);
   }
 
-  /** Ends every session, so a stolen refresh token stops working along with the old password. */
+  /**
+   * Ends every session, so a stolen refresh token stops working along with the old password, then
+   * opens a fresh session for the device that made the change (it stays signed in).
+   */
   @Transactional
-  public void changePassword(Long userId, ChangePasswordRequest request) {
+  public AuthResponse changePassword(Long userId, ChangePasswordRequest request) {
     requireBcryptLength(request.newPassword());
     User user =
         userRepository
@@ -122,6 +125,7 @@ public class AuthService {
     user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
     tokenService.revokeAll(userId);
     auditService.record(userId, "PASSWORD_CHANGED", AUDIT_ENTITY, userId);
+    return AuthResponse.of(user, tokenService.issue(user));
   }
 
   /** Sign-up after the email was verified by a code (AccountVerificationService). */

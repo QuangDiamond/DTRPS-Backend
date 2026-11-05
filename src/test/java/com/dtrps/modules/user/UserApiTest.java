@@ -135,7 +135,7 @@ class UserApiTest extends ApiTestBase {
   }
 
   @Test
-  @DisplayName("change password replaces the password and ends every session")
+  @DisplayName("change password ends the other sessions and keeps this device signed in")
   void changePassword_success_endsSessions() throws Exception {
     String email = uniqueEmail();
     JsonNode session = session(email);
@@ -144,7 +144,21 @@ class UserApiTest extends ApiTestBase {
             "/api/auth/password/change",
             session.get("accessToken").asText(),
             Map.of("currentPassword", PASSWORD, "newPassword", NEW_PASSWORD))
-        .andExpect(status().isNoContent());
+        .andExpect(status().isOk());
+    JsonNode fresh =
+        json(
+            postAs(
+                "/api/auth/password/change",
+                login(email, NEW_PASSWORD),
+                Map.of("currentPassword", NEW_PASSWORD, "newPassword", PASSWORD)));
+    // Phiên mới của thiết bị vừa đổi vẫn dùng được
+    postAs("/api/auth/refresh", null, Map.of("refreshToken", fresh.get("refreshToken").asText()))
+        .andExpect(status().isOk());
+    postAs(
+            "/api/auth/password/change",
+            fresh.get("accessToken").asText(),
+            Map.of("currentPassword", PASSWORD, "newPassword", NEW_PASSWORD))
+        .andExpect(status().isOk());
 
     postAs("/api/auth/login", null, Map.of("email", email, "password", PASSWORD))
         .andExpect(status().isUnauthorized());
@@ -212,7 +226,7 @@ class UserApiTest extends ApiTestBase {
             "/api/auth/password/change",
             session.get("accessToken").asText(),
             Map.of("currentPassword", PASSWORD, "newPassword", NEW_PASSWORD))
-        .andExpect(status().isNoContent());
+        .andExpect(status().isOk());
 
     assertThat(
             jdbcTemplate.queryForList(

@@ -54,10 +54,10 @@ public class AuthController {
     authService.logout(CurrentUser.id(jwt));
   }
 
+  /** Other devices are signed out; this one gets a new session in the response. */
   @PostMapping("/password/change")
-  @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void changePassword(
+  public AuthResponse changePassword(
       @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ChangePasswordRequest request) {
-    authService.changePassword(CurrentUser.id(jwt), request);
+    return authService.changePassword(CurrentUser.id(jwt), request);
   }
 }
