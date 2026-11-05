@@ -36,8 +36,6 @@ public final class TravelPlanDtos {
 
     List<String> categoryCodes();
 
-    List<String> interestCodes();
-
     String travelPace();
   }
 
@@ -51,11 +49,9 @@ public final class TravelPlanDtos {
       @Positive Integer groupSize,
       String description,
 
-      // Mã loại địa điểm (place_categories), dùng cho gợi ý địa điểm
+      // Sở thích của chuyến: mã loại hình con trong place_categories,
+      // giống sở thích của người dùng (users/me/preferences)
       @Size(max = 50) List<@NotBlank @Size(max = 50) String> categoryCodes,
-
-      // Mã sở thích của chuyến (bảng interests), lưu vào plan_interests
-      @Size(max = 50) List<@NotBlank @Size(max = 50) String> interestCodes,
       @Pattern(regexp = "RELAXED|BALANCED|PACKED", message = "Nhịp độ không hợp lệ")
           String travelPace)
       implements PlanFields {}
@@ -71,7 +67,6 @@ public final class TravelPlanDtos {
       @Positive Integer groupSize,
       String description,
       @Size(max = 50) List<@NotBlank @Size(max = 50) String> categoryCodes,
-      @Size(max = 50) List<@NotBlank @Size(max = 50) String> interestCodes,
       @Pattern(regexp = "RELAXED|BALANCED|PACKED", message = "Nhịp độ không hợp lệ")
           String travelPace)
       implements PlanFields {}
@@ -95,7 +90,6 @@ public final class TravelPlanDtos {
       Integer groupSize,
       String description,
       List<String> categoryCodes,
-      List<String> interestCodes,
       String travelPace,
       String status,
 
