@@ -19,6 +19,20 @@ spring:
       hibernate.schema_update.unique_constraint_strategy: RECREATE_QUIETLY
     open-in-view: false
 
+  # OTP emails (sign-up, password reset). Gmail: MAIL_USERNAME + an App Password (not the account
+  # password) in .env.local. Without them the code is written to the log instead of sent.
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
+
   servlet:
     multipart:
       # The service rejects files over 5MB with a clear message; this only caps the raw request
@@ -58,3 +72,11 @@ app:
   goong:
     api-key: ${GOONG_API_KEY:}
     base-url: ${GOONG_BASE_URL:https://rsapi.goong.io}
+  # Email verification codes for sign-up and password reset
+  otp:
+    ttl: ${OTP_TTL:10m}
+    resend-after: ${OTP_RESEND_AFTER:60s}
+    max-attempts: ${OTP_MAX_ATTEMPTS:5}
+    # A verified code gives a one-time ticket to finish sign-up / set the new password
+    ticket-ttl: ${OTP_TICKET_TTL:15m}
+    from-name: SmartTravel

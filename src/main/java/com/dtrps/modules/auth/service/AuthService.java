@@ -124,6 +124,29 @@ public class AuthService {
     auditService.record(userId, "PASSWORD_CHANGED", AUDIT_ENTITY, userId);
   }
 
+  /** Sign-up after the email was verified by a code (AccountVerificationService). */
+  @Transactional
+  public AuthResponse registerVerified(String name, String email, String password) {
+    return register(new RegisterRequest(name, email, password));
+  }
+
+  /**
+   * Sets a new password after the email was verified by a code: every session of the account is
+   * signed out and failed sign-in attempts are forgotten.
+   */
+  @Transactional
+  public void resetPassword(String email, String newPassword) {
+    requireBcryptLength(newPassword);
+    User user =
+        userRepository
+            .findByEmail(email)
+            .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, USER_NOT_FOUND));
+    user.setPasswordHash(passwordEncoder.encode(newPassword));
+    tokenService.revokeAll(user.getUserId());
+    loginThrottle.reset(email);
+    auditService.record(user.getUserId(), "PASSWORD_RESET", AUDIT_ENTITY, user.getUserId());
+  }
+
   private static void requireBcryptLength(String password) {
     if (password.getBytes(StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES) {
       throw new ApiException(HttpStatus.BAD_REQUEST, PASSWORD_TOO_LONG);

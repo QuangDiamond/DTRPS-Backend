@@ -33,7 +33,18 @@ import org.springframework.web.util.UrlPathHelper;
 })
 public class SecurityConfig {
     private static final Set<String> PUBLIC_AUTH_PATHS =
-            Set.of("/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/api/auth/revoke");
+            Set.of(
+                    "/api/auth/login",
+                    "/api/auth/register",
+                    "/api/auth/refresh",
+                    "/api/auth/revoke",
+                    // Sign-up and password reset with an emailed code
+                    "/api/auth/register/otp",
+                    "/api/auth/register/verify",
+                    "/api/auth/register/complete",
+                    "/api/auth/password/otp",
+                    "/api/auth/password/verify",
+                    "/api/auth/password/reset");
 
     private static final UrlPathHelper PATH_HELPER = new UrlPathHelper();
     private static final int BCRYPT_STRENGTH = 12;
