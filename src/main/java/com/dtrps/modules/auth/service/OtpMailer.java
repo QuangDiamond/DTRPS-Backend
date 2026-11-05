@@ -4,15 +4,19 @@ import com.dtrps.exception.ApiException;
 import com.dtrps.modules.auth.config.OtpProperties;
 import com.dtrps.modules.auth.entity.EmailOtp;
 import jakarta.mail.MessagingException;
+import jakarta.mail.Transport;
 import jakarta.mail.internet.MimeMessage;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import org.eclipse.angus.mail.smtp.SMTPTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.HtmlUtils;
@@ -57,11 +61,46 @@ public class OtpMailer {
       helper.setTo(email);
       helper.setSubject(subject);
       helper.setText(plainText(name, code, register), html(name, code, register));
-      mailSender.send(message);
+      String reply = deliver(message);
+      log.info(
+          "Đã gửi mã {} tới {} lúc {} | Message-ID {} | máy chủ mail: {}",
+          purpose,
+          mask(email),
+          Instant.now(),
+          message.getMessageID(),
+          reply);
     } catch (MessagingException | MailException | UnsupportedEncodingException e) {
-      log.error("Không gửi được email OTP tới {}", email, e);
+      log.error("Không gửi được mã {} tới {}", purpose, mask(email), e);
       throw new ApiException(HttpStatus.BAD_GATEWAY, SEND_FAILED);
     }
+  }
+
+  /**
+   * Sends over our own SMTP connection when possible, so the server's reply (e.g. Gmail's "250
+   * 2.0.0 OK … gsmtp" with its queue id) can be logged; otherwise falls back to the plain sender.
+   */
+  private String deliver(MimeMessage message) throws MessagingException {
+    if (!(mailSender instanceof JavaMailSenderImpl impl)) {
+      mailSender.send(message);
+      return "(không có phản hồi chi tiết)";
+    }
+    message.saveChanges();
+    try (Transport transport = impl.getSession().getTransport(impl.getProtocol())) {
+      transport.connect(impl.getHost(), impl.getPort(), impl.getUsername(), impl.getPassword());
+      transport.sendMessage(message, message.getAllRecipients());
+      return transport instanceof SMTPTransport smtp
+          ? smtp.getLastServerResponse().strip()
+          : "(đã gửi)";
+    }
+  }
+
+  /** "nvu45823@gmail.com" → "nv••••••@gmail.com" */
+  static String mask(String email) {
+    int at = email.indexOf('@');
+    if (at <= 0) return "•••";
+    String local = email.substring(0, at);
+    String shown = local.substring(0, Math.min(2, local.length()));
+    return shown + "•".repeat(Math.max(1, local.length() - shown.length())) + email.substring(at);
   }
 
   private long minutes() {
