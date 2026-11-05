@@ -106,6 +106,22 @@ public class PlaceService {
         details.images());
   }
 
+  /** Summaries for already-loaded places (e.g. a traveller's favorites), any status, in order. */
+  @Transactional(readOnly = true)
+  public List<PlaceSummaryResponse> summaries(List<Place> places) {
+    List<Long> ids = places.stream().map(Place::getPlaceId).toList();
+    Map<Long, List<PlaceImage>> images = imagesOf(ids);
+    Map<Long, Rating> ratings = ratingsOf(ids);
+    return places.stream()
+        .map(
+            place ->
+                summary(
+                    place,
+                    images.getOrDefault(place.getPlaceId(), List.of()),
+                    ratings.get(place.getPlaceId())))
+        .toList();
+  }
+
   // ===== Helpers =====
 
   /** Images of every place on the page in one query, cover first within each place. */
