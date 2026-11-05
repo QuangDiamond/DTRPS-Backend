@@ -146,12 +146,15 @@ public class AdminPlaceEditService {
 
   // ===== Opening hours =====
 
-  /** Replaces the whole week: days 1–7 each once, a closed day flagged {@code closed}. */
+  /**
+   * Replaces the whole week: days 1–7 each once, a closed day flagged {@code closed}. An empty week
+   * clears the hours, which means the place is open all day.
+   */
   @Transactional
   public AdminPlaceDetail replaceHours(Long adminId, Long placeId, List<OpeningHourDto> days) {
     Place place = editable(placeId);
     List<OpeningHourDto> hours = normalize(days, null, null).openingHours();
-    if (hours.size() != WEEK) {
+    if (!hours.isEmpty() && hours.size() != WEEK) {
       throw new ApiException(HttpStatus.BAD_REQUEST, FULL_WEEK);
     }
     hourRepository.deleteByPlaceId(placeId);

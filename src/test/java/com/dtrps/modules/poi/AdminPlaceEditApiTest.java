@@ -136,7 +136,7 @@ class AdminPlaceEditApiTest extends ApiTestBase {
   }
 
   @Test
-  @DisplayName("opening hours must cover all 7 days")
+  @DisplayName("opening hours cover all 7 days, or none for open all day")
   void hours_needFullWeek() throws Exception {
     String admin = adminToken();
     Map<String, Object> body = basics("POI tuần thiếu");
@@ -154,6 +154,11 @@ class AdminPlaceEditApiTest extends ApiTestBase {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.openingHours.length()").value(7))
         .andExpect(jsonPath("$.openingHours[0].closed").value(true));
+
+    // Tuần rỗng = mở cả ngày, xoá hết giờ đã khai báo
+    putAs(PLACES + "/" + id + "/opening-hours", admin, Map.of("days", List.of()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.openingHours.length()").value(0));
   }
 
   @Test
