@@ -1,7 +1,7 @@
 package com.dtrps.modules.user.service;
 
 import com.dtrps.exception.ApiException;
-import com.dtrps.modules.poi.repository.InterestRepository;
+import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
 import com.dtrps.modules.poi.repository.SpecialNeedRepository;
 import com.dtrps.modules.user.dto.PreferenceResponse;
 import com.dtrps.modules.user.dto.UpdatePreferencesRequest;
@@ -22,17 +22,17 @@ public class PreferenceService {
 
   private final PreferenceRepository preferenceRepository;
   private final UserRepository userRepository;
-  private final InterestRepository interestRepository;
+  private final PlaceCategoryRepository categoryRepository;
   private final SpecialNeedRepository specialNeedRepository;
 
   public PreferenceService(
       PreferenceRepository preferenceRepository,
       UserRepository userRepository,
-      InterestRepository interestRepository,
+      PlaceCategoryRepository categoryRepository,
       SpecialNeedRepository specialNeedRepository) {
     this.preferenceRepository = preferenceRepository;
     this.userRepository = userRepository;
-    this.interestRepository = interestRepository;
+    this.categoryRepository = categoryRepository;
     this.specialNeedRepository = specialNeedRepository;
   }
 
@@ -48,10 +48,8 @@ public class PreferenceService {
   public PreferenceResponse update(Long userId, UpdatePreferencesRequest request) {
     Preference preference =
         preferenceRepository.findByUserUserId(userId).orElseGet(() -> newPreference(userId));
-    preference.setBudgetLevel(request.budgetLevel());
-    preference.setTravelStyle(request.travelStyle());
     preference.setNotes(request.notes());
-    preference.setInterests(resolve(request.interests(), interestRepository::findByCodeIn));
+    preference.setInterests(resolve(request.interests(), categoryRepository::findByCodeIn));
     preference.setSpecialNeeds(
         resolve(request.specialNeeds(), specialNeedRepository::findByCodeIn));
     return PreferenceResponse.from(preferenceRepository.save(preference));
