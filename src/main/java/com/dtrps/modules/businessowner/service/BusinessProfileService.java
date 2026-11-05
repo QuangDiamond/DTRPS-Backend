@@ -74,18 +74,21 @@ public class BusinessProfileService {
   private final RoleRepository roleRepository;
   private final AuditService auditService;
   private final Clock clock;
+  private final PartnerNotices notices;
 
   public BusinessProfileService(
       BusinessProfileRepository profileRepository,
       UserRepository userRepository,
       RoleRepository roleRepository,
       AuditService auditService,
-      Clock clock) {
+      Clock clock,
+      PartnerNotices notices) {
     this.profileRepository = profileRepository;
     this.userRepository = userRepository;
     this.roleRepository = roleRepository;
     this.auditService = auditService;
     this.clock = clock;
+    this.notices = notices;
   }
 
   // ===== Business owner =====
@@ -106,6 +109,7 @@ public class BusinessProfileService {
     profile.setStatus(PENDING);
     profileRepository.saveAndFlush(profile);
     auditService.record(userId, ACTION_SUBMITTED, AUDIT_ENTITY, profile.getBusinessId());
+    notices.profileSubmitted(profile, false);
     return toResponse(profile);
   }
 
@@ -133,6 +137,11 @@ public class BusinessProfileService {
     }
     profileRepository.flush();
     auditService.record(userId, action, AUDIT_ENTITY, profile.getBusinessId());
+    if (ACTION_RESUBMITTED.equals(action)) {
+      notices.profileSubmitted(profile, true);
+    } else {
+      notices.profileUpdated(profile);
+    }
     return toResponse(profile);
   }
 
@@ -190,6 +199,7 @@ public class BusinessProfileService {
     profile.setApprovedAt(clock.instant());
     grantBusinessOwnerRole(profile.getUser());
     auditService.record(adminId, ACTION_APPROVED, AUDIT_ENTITY, businessId);
+    notices.profileDecided(profile, adminId, "PARTNER_APPROVED", null);
     return toResponse(profile);
   }
 
@@ -199,6 +209,7 @@ public class BusinessProfileService {
     profile.setStatus(INACTIVE);
     String note = reason.trim();
     auditService.record(adminId, ACTION_REJECTED, AUDIT_ENTITY, businessId, note);
+    notices.profileDecided(profile, adminId, "PARTNER_REJECTED", note);
     return BusinessProfileResponse.from(profile, note);
   }
 
@@ -217,6 +228,7 @@ public class BusinessProfileService {
       profile.setStatus(SUSPENDED);
       String note = reason.trim();
       auditService.record(adminId, ACTION_SUSPENDED, AUDIT_ENTITY, businessId, note);
+      notices.profileDecided(profile, adminId, "PARTNER_SUSPENDED", note);
       return BusinessProfileResponse.from(profile, note);
     }
     if (!SUSPENDED.equals(profile.getStatus())) {
@@ -224,6 +236,7 @@ public class BusinessProfileService {
     }
     profile.setStatus(ACTIVE);
     auditService.record(adminId, ACTION_REACTIVATED, AUDIT_ENTITY, businessId);
+    notices.profileDecided(profile, adminId, "PARTNER_REACTIVATED", null);
     return toResponse(profile);
   }
 

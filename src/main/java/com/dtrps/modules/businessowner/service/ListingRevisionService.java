@@ -73,6 +73,7 @@ public class ListingRevisionService {
   private final AuditService auditService;
   private final ObjectMapper objectMapper;
   private final Clock clock;
+  private final PartnerNotices notices;
 
   public ListingRevisionService(
       BusinessListingService listingService,
@@ -82,7 +83,8 @@ public class ListingRevisionService {
       UserRepository userRepository,
       AuditService auditService,
       ObjectMapper objectMapper,
-      Clock clock) {
+      Clock clock,
+      PartnerNotices notices) {
     this.listingService = listingService;
     this.revisionRepository = revisionRepository;
     this.references = references;
@@ -91,6 +93,7 @@ public class ListingRevisionService {
     this.auditService = auditService;
     this.objectMapper = objectMapper;
     this.clock = clock;
+    this.notices = notices;
   }
 
   // ===== Business owner =====
@@ -131,6 +134,7 @@ public class ListingRevisionService {
     revision.setStatus(PENDING);
     revisionRepository.saveAndFlush(revision);
     auditService.record(userId, ACTION_PROPOSED, AUDIT_ENTITY, revision.getRevisionId());
+    notices.revisionSubmitted(revision);
     return toResponse(revision, false);
   }
 
@@ -156,6 +160,7 @@ public class ListingRevisionService {
     requirePending(revision);
     revision.setStatus(CANCELLED);
     auditService.record(userId, ACTION_CANCELLED, AUDIT_ENTITY, revisionId);
+    notices.revisionCancelled(revision);
     return toResponse(revision, false);
   }
 
@@ -223,6 +228,7 @@ public class ListingRevisionService {
     revision.setReviewNote(BusinessListingService.blankToNull(note));
     revisionRepository.flush();
     auditService.record(adminId, ACTION_APPROVED, AUDIT_ENTITY, revisionId);
+    notices.revisionDecided(revision, true, null);
     return new RevisionReviewDetail(toResponse(revision, true), listingService.toResponse(listing));
   }
 
@@ -237,6 +243,7 @@ public class ListingRevisionService {
     revision.setReviewNote(request.note().trim());
     auditService.record(
         adminId, ACTION_REJECTED, AUDIT_ENTITY, revisionId, request.partnerFeedback().trim());
+    notices.revisionDecided(revision, false, request.partnerFeedback().trim());
     return toResponse(revision, true);
   }
 
