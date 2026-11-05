@@ -13,6 +13,7 @@ import com.dtrps.modules.businessowner.entity.BusinessListing;
 import com.dtrps.modules.businessowner.entity.BusinessListingRevision;
 import com.dtrps.modules.businessowner.repository.BusinessListingRevisionRepository;
 import com.dtrps.modules.poi.dto.PlaceDetails;
+import com.dtrps.modules.poi.dto.PlaceTypes;
 import com.dtrps.modules.poi.dto.ReferenceItem;
 import com.dtrps.modules.poi.entity.Place;
 import com.dtrps.modules.poi.entity.PlaceCategory;
@@ -110,7 +111,9 @@ public class ListingRevisionService {
     BusinessListingRevision revision = new BusinessListingRevision();
     revision.setListing(listing);
     revision.setProposedBy(userRepository.getReferenceById(userId));
-    revision.setCategory(references.subtype(request.categoryCode()));
+    List<PlaceCategory> types = references.types(request.categoryCodes(), request.categoryCode());
+    revision.setCategory(types.get(0));
+    revision.getCategories().addAll(types);
     revision.setProvince(references.province(request.provinceCode()));
     revision.setName(request.name().trim());
     revision.setDescription(BusinessListingService.blankToNull(request.description()));
@@ -206,6 +209,9 @@ public class ListingRevisionService {
     place.setLatitude(revision.getLatitude());
     place.setLongitude(revision.getLongitude());
     place.setCategory(revision.getCategory());
+    place.getCategories().clear();
+    place.getCategories().add(revision.getCategory());
+    place.getCategories().addAll(revision.getCategories());
     place.setPlaceType(revision.getCategory().getCode());
     place.setProvince(revision.getProvince());
     place.setPhone(payload.phone());
@@ -285,6 +291,7 @@ public class ListingRevisionService {
     RevisionPayload payload = readPayload(revision);
     PlaceCategory category = revision.getCategory();
     PlaceCategory group = category == null ? null : category.getParent();
+    PlaceTypes types = PlaceTypes.of(category, revision.getCategories());
     ProposedPlace proposed =
         new ProposedPlace(
             revision.getName(),
@@ -294,6 +301,8 @@ public class ListingRevisionService {
             revision.getLongitude(),
             group == null ? null : new ReferenceItem(group.getCode(), group.getName()),
             category == null ? null : new ReferenceItem(category.getCode(), category.getName()),
+            types.groups(),
+            types.categories(),
             revision.getProvince() == null
                 ? null
                 : new ReferenceItem(

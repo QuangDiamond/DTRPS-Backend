@@ -309,9 +309,12 @@ public class AdminPlaceEditService {
   }
 
   private void applyBasics(Place place, AdminPlaceRequest request) {
-    PlaceCategory category = references.subtype(request.categoryCode());
+    List<PlaceCategory> types = references.types(request.categoryCodes(), request.categoryCode());
+    PlaceCategory category = types.get(0);
     place.setName(request.name().trim());
     place.setCategory(category);
+    place.getCategories().clear();
+    place.getCategories().addAll(types);
     place.setPlaceType(category.getCode());
     place.setProvince(references.province(request.provinceCode()));
     place.setAddress(request.address().trim());

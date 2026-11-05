@@ -146,7 +146,7 @@ public class AdminCategoryService {
   @Transactional
   public void delete(Long adminId, Long categoryId) {
     PlaceCategory category = type(categoryId);
-    if (placeRepository.existsByCategoryCategoryId(categoryId)) {
+    if (placeRepository.usesCategory(categoryId)) {
       throw new ApiException(HttpStatus.CONFLICT, IN_USE);
     }
     categoryRepository.delete(category);

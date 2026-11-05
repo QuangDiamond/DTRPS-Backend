@@ -189,7 +189,7 @@ class ListingRevisionApiTest extends ApiTestBase {
   void approve_appliesChanges() throws Exception {
     String token = owner(true);
     Map<String, Object> change = placeBody("Mộc Phố Coffee & Books");
-    change.put("categoryCode", "restaurant");
+    change.put("categoryCodes", List.of("restaurant", "homestay"));
     change.put("website", "https://mocpho.vn");
     change.put(
         "openingHours",
@@ -204,6 +204,8 @@ class ListingRevisionApiTest extends ApiTestBase {
     getAs(ADMIN + "?status=PENDING&keyword=Books", admin).andExpect(jsonPath("$.total").value(1));
     getAs(ADMIN + "/" + id, admin)
         .andExpect(jsonPath("$.revision.proposed.name").value("Mộc Phố Coffee & Books"))
+        .andExpect(jsonPath("$.revision.proposed.categories[1].code").value("homestay"))
+        .andExpect(jsonPath("$.current.categories.length()").value(1))
         .andExpect(jsonPath("$.current.name").value("Mộc Phố Coffee"));
 
     postAs(ADMIN + "/" + id + "/approve", admin, null)
@@ -213,6 +215,8 @@ class ListingRevisionApiTest extends ApiTestBase {
     getAs(place(token), token)
         .andExpect(jsonPath("$.name").value("Mộc Phố Coffee & Books"))
         .andExpect(jsonPath("$.category.code").value("restaurant"))
+        .andExpect(jsonPath("$.categories[1].code").value("homestay"))
+        .andExpect(jsonPath("$.groups[1].code").value("lodging"))
         .andExpect(jsonPath("$.website").value("https://mocpho.vn"))
         .andExpect(jsonPath("$.status").value("APPROVED"))
         .andExpect(jsonPath("$.placeStatus").value("ACTIVE"))
