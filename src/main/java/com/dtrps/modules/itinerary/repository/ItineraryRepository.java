@@ -27,4 +27,7 @@ public interface ItineraryRepository
             Long planId,
             String status
     );
+
+    // Kế hoạch đã có lịch trình (bất kỳ phiên bản nào) hay chưa
+    boolean existsByPlanPlanId(Long planId);
 }

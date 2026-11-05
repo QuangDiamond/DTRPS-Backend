@@ -72,6 +72,9 @@ app:
   goong:
     api-key: ${GOONG_API_KEY:}
     base-url: ${GOONG_BASE_URL:https://rsapi.goong.io}
+  # Google sign-in on the web: the OAuth Client ID (public). Blank turns Google sign-in off.
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
   # Email verification codes for sign-up and password reset
   otp:
     ttl: ${OTP_TTL:10m}

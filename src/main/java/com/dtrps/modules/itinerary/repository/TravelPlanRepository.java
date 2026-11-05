@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -30,4 +31,66 @@ public interface TravelPlanRepository
             Long planId,
             Long userId
     );
+
+    // ---- Xóa kế hoạch ----
+    // DB không có ON DELETE CASCADE, nên xóa dữ liệu con theo thứ tự từ dưới lên
+    // trong cùng một transaction (gọi từ TravelPlanService.delete).
+
+    @Modifying(flushAutomatically = true)
+    @Query("""
+      DELETE FROM ActivityProgress a
+      WHERE a.progress.progressId IN (
+          SELECT p.progressId FROM TripProgress p WHERE p.itinerary.plan.planId = :planId)
+        OR a.item.itemId IN (
+          SELECT i.itemId FROM ItineraryItem i WHERE i.day.itinerary.plan.planId = :planId)
+      """)
+    int deleteActivityProgressByPlanId(@Param("planId") Long planId);
+
+    @Modifying
+    @Query("""
+      DELETE FROM TripProgress p
+      WHERE p.itinerary.itineraryId IN (
+          SELECT it.itineraryId FROM Itinerary it WHERE it.plan.planId = :planId)
+      """)
+    int deleteTripProgressByPlanId(@Param("planId") Long planId);
+
+    @Modifying
+    @Query("""
+      DELETE FROM ItineraryShare s
+      WHERE s.itinerary.itineraryId IN (
+          SELECT it.itineraryId FROM Itinerary it WHERE it.plan.planId = :planId)
+      """)
+    int deleteItinerarySharesByPlanId(@Param("planId") Long planId);
+
+    @Modifying
+    @Query("""
+      DELETE FROM ItineraryItem i
+      WHERE i.day.dayId IN (
+          SELECT d.dayId FROM ItineraryDay d WHERE d.itinerary.plan.planId = :planId)
+      """)
+    int deleteItineraryItemsByPlanId(@Param("planId") Long planId);
+
+    @Modifying
+    @Query("""
+      DELETE FROM ItineraryDay d
+      WHERE d.itinerary.itineraryId IN (
+          SELECT it.itineraryId FROM Itinerary it WHERE it.plan.planId = :planId)
+      """)
+    int deleteItineraryDaysByPlanId(@Param("planId") Long planId);
+
+    @Modifying
+    @Query("DELETE FROM Itinerary it WHERE it.plan.planId = :planId")
+    int deleteItinerariesByPlanId(@Param("planId") Long planId);
+
+    @Modifying
+    @Query("DELETE FROM PlanPlace pp WHERE pp.plan.planId = :planId")
+    int deletePlanPlacesByPlanId(@Param("planId") Long planId);
+
+    @Modifying
+    @Query("DELETE FROM TripFeedback f WHERE f.plan.planId = :planId")
+    int deleteTripFeedbackByPlanId(@Param("planId") Long planId);
+
+    @Modifying(clearAutomatically = true)
+    @Query("DELETE FROM TravelPlan p WHERE p.planId = :planId")
+    int deletePlanById(@Param("planId") Long planId);
 }
