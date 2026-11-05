@@ -2,6 +2,7 @@ package com.dtrps.modules.user.repository;
 
 import com.dtrps.modules.user.entity.User;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,4 +29,10 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
   @Query("select count(distinct u) from User u join u.roles r where r.roleName = :roleName")
   long countByRole(@Param("roleName") String roleName);
+
+  /** Ids of active users holding the role, e.g. every admin to notify */
+  @Query(
+      "select distinct u.userId from User u join u.roles r"
+          + " where r.roleName = :roleName and u.status = 'ACTIVE'")
+  List<Long> findActiveIdsByRole(@Param("roleName") String roleName);
 }

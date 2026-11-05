@@ -11,11 +11,16 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.Check;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
@@ -67,6 +72,17 @@ public class BusinessListingRevision {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "category_id")
   private PlaceCategory category;
+
+  /** Every proposed type, including {@link #category} (the main one) */
+  @ManyToMany(fetch = FetchType.LAZY)
+  @JoinTable(
+      name = "listing_revision_categories",
+      indexes =
+          @Index(name = "idx_listing_revision_categories_category", columnList = "category_id"),
+      joinColumns = @JoinColumn(name = "revision_id"),
+      inverseJoinColumns = @JoinColumn(name = "category_id"))
+  @BatchSize(size = 100)
+  private Set<PlaceCategory> categories = new HashSet<>();
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "province_id")

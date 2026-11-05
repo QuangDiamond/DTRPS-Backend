@@ -1,6 +1,7 @@
 package com.dtrps.modules.poi.dto;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * One row of the admin place catalogue. {@code source} is PARTNER when a business listing owns the
@@ -11,6 +12,9 @@ public record AdminPlaceSummary(
     String name,
     ReferenceItem group,
     ReferenceItem category,
+    /** Every group / type of the place, the main one first */
+    List<ReferenceItem> groups,
+    List<PlaceTypes.Type> categories,
     ReferenceItem province,
     String address,
     String status,

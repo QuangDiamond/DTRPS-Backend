@@ -76,6 +76,7 @@ public class BusinessListingService {
   private final UserRepository userRepository;
   private final AuditService auditService;
   private final Clock clock;
+  private final PartnerNotices notices;
 
   public BusinessListingService(
       BusinessListingRepository listingRepository,
@@ -85,7 +86,8 @@ public class BusinessListingService {
       PlaceDetailsService placeDetails,
       UserRepository userRepository,
       AuditService auditService,
-      Clock clock) {
+      Clock clock,
+      PartnerNotices notices) {
     this.listingRepository = listingRepository;
     this.profileRepository = profileRepository;
     this.placeRepository = placeRepository;
@@ -94,6 +96,7 @@ public class BusinessListingService {
     this.userRepository = userRepository;
     this.auditService = auditService;
     this.clock = clock;
+    this.notices = notices;
   }
 
   // ===== Business owner =====
@@ -114,6 +117,7 @@ public class BusinessListingService {
     listing.setStatus(PENDING);
     listingRepository.saveAndFlush(listing);
     auditService.record(userId, ACTION_SUBMITTED, AUDIT_ENTITY, listing.getListingId());
+    notices.listingSubmitted(listing, false);
     return toResponse(listing);
   }
 
@@ -149,6 +153,11 @@ public class BusinessListingService {
     }
     listingRepository.flush();
     auditService.record(userId, action, AUDIT_ENTITY, listing.getListingId());
+    if (ACTION_RESUBMITTED.equals(action)) {
+      notices.listingSubmitted(listing, true);
+    } else {
+      notices.listingUpdated(listing);
+    }
     return toResponse(listing);
   }
 
@@ -216,6 +225,7 @@ public class BusinessListingService {
     listing.setApprovedAt(clock.instant());
     listing.getPlace().setStatus(PLACE_ACTIVE);
     auditService.record(adminId, ACTION_APPROVED, AUDIT_ENTITY, listingId);
+    notices.listingDecided(listing, true, null);
     return toResponse(listing);
   }
 
@@ -225,6 +235,7 @@ public class BusinessListingService {
     listing.setStatus(REJECTED);
     String note = reason.trim();
     auditService.record(adminId, ACTION_REJECTED, AUDIT_ENTITY, listingId, note);
+    notices.listingDecided(listing, false, note);
     return BusinessListingResponse.from(
         listing, note, placeDetails.read(listing.getPlace().getPlaceId()));
   }
@@ -270,9 +281,12 @@ public class BusinessListingService {
   // ===== Helpers =====
 
   private void applyBasics(Place place, BusinessListingRequest request) {
-    PlaceCategory category = references.subtype(request.categoryCode());
+    List<PlaceCategory> types = references.types(request.categoryCodes(), request.categoryCode());
+    PlaceCategory category = types.get(0);
     place.setName(request.name().trim());
     place.setCategory(category);
+    place.getCategories().clear();
+    place.getCategories().addAll(types);
     place.setPlaceType(category.getCode());
     place.setProvince(references.province(request.provinceCode()));
     place.setAddress(request.address().trim());

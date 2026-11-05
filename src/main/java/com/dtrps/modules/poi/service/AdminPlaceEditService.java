@@ -52,7 +52,10 @@ public class AdminPlaceEditService {
   private static final int MAX_PRICES = 20;
   private static final String TOO_MANY_PRICES = "Tối đa " + MAX_PRICES + " mức giá";
   private static final String DEFAULT_CURRENCY = "VND";
-  private static final String ACTIVE = "ACTIVE";
+
+  /** New places stay hidden until the admin publishes them (status ACTIVE) */
+  private static final String DRAFT = "DRAFT";
+
   private static final int WEEK = 7;
 
   private final PlaceRepository placeRepository;
@@ -96,7 +99,7 @@ public class AdminPlaceEditService {
     PlaceDetails details = normalize(request.openingHours(), request.prices(), request.images());
     Place place = new Place();
     applyBasics(place, request);
-    place.setStatus(request.status() == null ? ACTIVE : request.status());
+    place.setStatus(request.status() == null ? DRAFT : request.status());
     placeRepository.save(place);
     placeDetails.replace(place, details);
     placeRepository.flush();
@@ -306,9 +309,12 @@ public class AdminPlaceEditService {
   }
 
   private void applyBasics(Place place, AdminPlaceRequest request) {
-    PlaceCategory category = references.subtype(request.categoryCode());
+    List<PlaceCategory> types = references.types(request.categoryCodes(), request.categoryCode());
+    PlaceCategory category = types.get(0);
     place.setName(request.name().trim());
     place.setCategory(category);
+    place.getCategories().clear();
+    place.getCategories().addAll(types);
     place.setPlaceType(category.getCode());
     place.setProvince(references.province(request.provinceCode()));
     place.setAddress(request.address().trim());

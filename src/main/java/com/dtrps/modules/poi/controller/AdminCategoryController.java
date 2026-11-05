@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -58,5 +59,12 @@ public class AdminCategoryController {
       @PathVariable Long id,
       @Valid @RequestBody CategoryStatusRequest request) {
     return categoryService.changeStatus(CurrentUser.id(jwt), id, request.status());
+  }
+
+  /** Only a type no place uses; otherwise 409 (turn it off instead). */
+  @DeleteMapping("/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+    categoryService.delete(CurrentUser.id(jwt), id);
   }
 }

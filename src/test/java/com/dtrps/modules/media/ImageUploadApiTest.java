@@ -33,7 +33,7 @@ class ImageUploadApiTest extends ApiTestBase {
   @Test
   @DisplayName("a real png is stored and its URL returned")
   void upload_returnsUrl() throws Exception {
-    when(storage.store(any(), eq("image/png"), any()))
+    when(storage.store(any(), eq("image/png"), any(), any()))
         .thenReturn("https://res.cloudinary.com/demo/image/upload/a.png");
 
     upload(adminToken(), new MockMultipartFile("file", "a.png", "image/png", PNG))
@@ -49,7 +49,7 @@ class ImageUploadApiTest extends ApiTestBase {
             new MockMultipartFile("file", "x.jpg", "image/jpeg", "not an image".getBytes()))
         .andExpect(status().isUnsupportedMediaType())
         .andExpect(jsonPath("$.message").value("Chỉ nhận ảnh jpg, png hoặc webp"));
-    verify(storage, never()).store(any(), any(), any());
+    verify(storage, never()).store(any(), any(), any(), any());
   }
 
   @Test

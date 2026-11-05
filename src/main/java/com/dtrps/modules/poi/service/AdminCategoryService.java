@@ -28,6 +28,7 @@ public class AdminCategoryService {
   static final String ACTION_CREATED = "CATEGORY_CREATED";
   static final String ACTION_UPDATED = "CATEGORY_UPDATED";
   static final String ACTION_STATUS = "CATEGORY_STATUS_CHANGED";
+  static final String ACTION_DELETED = "CATEGORY_DELETED";
 
   private static final String NOT_FOUND = "Không tìm thấy loại địa điểm";
   private static final String UNKNOWN_GROUP = "Nhóm dịch vụ không hợp lệ";
@@ -36,6 +37,8 @@ public class AdminCategoryService {
   private static final String MISSING_CODE = "Vui lòng nhập mã loại";
   private static final String DUPLICATE_CODE = "Mã loại đã tồn tại";
   private static final String DUPLICATE_NAME = "Tên loại đã tồn tại";
+  private static final String IN_USE =
+      "Loại hình đang có địa điểm sử dụng nên không xoá được — hãy tắt loại hình thay vì xoá";
 
   private final PlaceCategoryRepository categoryRepository;
   private final PlaceRepository placeRepository;
@@ -134,6 +137,21 @@ public class AdminCategoryService {
     categoryRepository.flush();
     auditService.record(adminId, ACTION_STATUS, AUDIT_ENTITY, categoryId, status);
     return toItem(category, usageOf(categoryId));
+  }
+
+  /**
+   * Removes a type no place uses (e.g. one added by mistake). A type in use can only be turned off,
+   * so existing places keep their type.
+   */
+  @Transactional
+  public void delete(Long adminId, Long categoryId) {
+    PlaceCategory category = type(categoryId);
+    if (placeRepository.usesCategory(categoryId)) {
+      throw new ApiException(HttpStatus.CONFLICT, IN_USE);
+    }
+    categoryRepository.delete(category);
+    categoryRepository.flush();
+    auditService.record(adminId, ACTION_DELETED, AUDIT_ENTITY, categoryId, category.getCode());
   }
 
   // ===== Helpers =====

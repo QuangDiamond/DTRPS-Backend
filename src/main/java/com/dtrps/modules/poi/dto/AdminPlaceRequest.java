@@ -12,13 +12,17 @@ import java.util.List;
 /**
  * A place the admin creates or edits directly (no partner, no review). On create, missing lists
  * mean none; on update, a missing list (null) keeps what the place has. Opening hours, when given,
- * cover all 7 days. {@code status} defaults to ACTIVE on create and is kept on update.
+ * cover all 7 days. {@code status} defaults to DRAFT on create and is kept on update.
  */
 public record AdminPlaceRequest(
     @NotBlank(message = "Vui lòng nhập tên địa điểm")
         @Size(min = 2, max = 255, message = "Tên địa điểm phải có từ 2 đến 255 ký tự")
         String name,
-    @NotBlank(message = "Vui lòng chọn loại hình địa điểm") @Size(max = 50) String categoryCode,
+    /** Main type alone (older clients); ignored when categoryCodes is given */
+    @Size(max = 50) String categoryCode,
+    /** Every type ticked, the first one is the main type */
+    @Size(max = 30, message = "Chọn quá nhiều loại hình")
+        List<@Size(max = 50) String> categoryCodes,
     @NotBlank(message = "Vui lòng chọn tỉnh/thành") @Size(max = 50) String provinceCode,
     @NotBlank(message = "Vui lòng nhập địa chỉ")
         @Size(max = 500, message = "Địa chỉ tối đa 500 ký tự")

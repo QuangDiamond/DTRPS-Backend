@@ -52,6 +52,7 @@ app:
   cloudinary:
     url: ${CLOUDINARY_URL:}
     folder: ${CLOUDINARY_FOLDER:dtrps/places}
+    avatar-folder: ${CLOUDINARY_AVATAR_FOLDER:dtrps/avatars}
   # Goong map services (/api/maps/*). The "API Key" from account.goong.io, server side only.
   # Blank disables them (503). The web keeps the separate public Maptiles key.
   goong:

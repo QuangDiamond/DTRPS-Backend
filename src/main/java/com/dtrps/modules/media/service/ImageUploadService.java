@@ -1,6 +1,7 @@
 package com.dtrps.modules.media.service;
 
 import com.dtrps.exception.ApiException;
+import com.dtrps.modules.media.config.CloudinaryProperties;
 import java.io.IOException;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -19,12 +20,24 @@ public class ImageUploadService {
       Map.of("image/jpeg", "jpg", "image/png", "png", "image/webp", "webp");
 
   private final ImageStorage storage;
+  private final CloudinaryProperties properties;
 
-  public ImageUploadService(ImageStorage storage) {
+  public ImageUploadService(ImageStorage storage, CloudinaryProperties properties) {
     this.storage = storage;
+    this.properties = properties;
   }
 
+  /** A place photo (default folder). */
   public String upload(MultipartFile file) {
+    return upload(file, null);
+  }
+
+  /** A profile picture, kept in the avatar folder. */
+  public String uploadAvatar(MultipartFile file) {
+    return upload(file, properties.avatarFolderOrDefault());
+  }
+
+  private String upload(MultipartFile file, String folder) {
     if (file == null || file.isEmpty()) {
       throw new ApiException(HttpStatus.BAD_REQUEST, EMPTY);
     }
@@ -41,7 +54,7 @@ public class ImageUploadService {
     if (contentType == null) {
       throw new ApiException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, UNSUPPORTED);
     }
-    return storage.store(content, contentType, "upload." + EXTENSIONS.get(contentType));
+    return storage.store(content, contentType, "upload." + EXTENSIONS.get(contentType), folder);
   }
 
   /** Content type from the file signature; null when it is not jpg / png / webp. */

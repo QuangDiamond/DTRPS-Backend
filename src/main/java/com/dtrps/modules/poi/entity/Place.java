@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.Check;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
@@ -53,6 +54,20 @@ public class Place {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "category_id")
   private PlaceCategory category;
+
+  /**
+   * Every type the place offers (a resort that also runs a restaurant and a bar), always including
+   * {@link #category}, which is the main one: the first type ticked, used for the map icon and
+   * reports.
+   */
+  @ManyToMany(fetch = FetchType.LAZY)
+  @JoinTable(
+      name = "place_category_links",
+      indexes = @Index(name = "idx_place_category_links_category", columnList = "category_id"),
+      joinColumns = @JoinColumn(name = "place_id"),
+      inverseJoinColumns = @JoinColumn(name = "category_id"))
+  @BatchSize(size = 100)
+  private Set<PlaceCategory> categories = new HashSet<>();
 
   @Column(name = "name", nullable = false, length = 255)
   private String name;

@@ -93,6 +93,44 @@ class AdminCategoryApiTest extends ApiTestBase {
   }
 
   @Test
+  @DisplayName("only a type no place uses can be deleted; groups never")
+  void delete_onlyUnused() throws Exception {
+    String admin = adminToken();
+    String suffix = UUID.randomUUID().toString().substring(0, 6);
+    String unused =
+        json(postAs(CATEGORIES, admin, type("cave_" + suffix, "Xoá được " + suffix)))
+            .get("id")
+            .asText();
+
+    deleteAs(CATEGORIES + "/" + unused, admin).andExpect(status().isNoContent());
+    getAs(CATEGORIES, admin)
+        .andExpect(jsonPath("$[*].types[?(@.code == 'cave_" + suffix + "')]").isEmpty());
+    deleteAs(CATEGORIES + "/" + unused, admin).andExpect(status().isNotFound());
+
+    // A type with a place keeps existing: it can only be turned off
+    Map<String, Object> place = new java.util.HashMap<>();
+    place.put("name", "Villa thử xoá " + suffix);
+    place.put("categoryCode", "villa");
+    place.put("provinceCode", "hanoi");
+    place.put("address", "1 Tràng Tiền");
+    place.put("latitude", 21.02);
+    place.put("longitude", 105.85);
+    postAs("/api/admin/places", admin, place).andExpect(status().isCreated());
+    String villa =
+        json(getAs(CATEGORIES, admin)).findValues("types").stream()
+            .flatMap(types -> java.util.stream.StreamSupport.stream(types.spliterator(), false))
+            .filter(item -> "villa".equals(item.get("code").asText()))
+            .findFirst()
+            .orElseThrow()
+            .get("id")
+            .asText();
+    deleteAs(CATEGORIES + "/" + villa, admin).andExpect(status().isConflict());
+
+    String lodging = json(getAs(CATEGORIES, admin)).get(0).get("id").asText();
+    deleteAs(CATEGORIES + "/" + lodging, admin).andExpect(status().isBadRequest());
+  }
+
+  @Test
   @DisplayName("only admins manage types")
   void adminOnly() throws Exception {
     getAs(CATEGORIES, travellerToken()).andExpect(status().isForbidden());

@@ -98,3 +98,36 @@ LEFT JOIN itinerary_days d ON d.itinerary_id = it.itinerary_id
 LEFT JOIN itinerary_items i ON i.day_id = d.day_id
 GROUP BY it.itinerary_id, it.currency
 @@
+
+-- Every place lists its main type among its types (places saved before multi-type support, or
+-- by older code, only had places.category_id)
+INSERT INTO place_category_links (place_id, category_id)
+SELECT place_id, category_id FROM places WHERE category_id IS NOT NULL
+ON CONFLICT DO NOTHING
+@@
+
+-- The short-lived single "second type" column became place_category_links /
+-- listing_revision_categories: move what it holds, then drop it
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'places' AND column_name = 'secondary_category_id') THEN
+        INSERT INTO place_category_links (place_id, category_id)
+        SELECT place_id, secondary_category_id FROM places WHERE secondary_category_id IS NOT NULL
+        ON CONFLICT DO NOTHING;
+        ALTER TABLE places DROP COLUMN secondary_category_id;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'business_listing_revisions'
+                 AND column_name = 'secondary_category_id') THEN
+        INSERT INTO listing_revision_categories (revision_id, category_id)
+        SELECT revision_id, category_id FROM business_listing_revisions WHERE category_id IS NOT NULL
+        UNION
+        SELECT revision_id, secondary_category_id FROM business_listing_revisions
+        WHERE secondary_category_id IS NOT NULL
+        ON CONFLICT DO NOTHING;
+        ALTER TABLE business_listing_revisions DROP COLUMN secondary_category_id;
+    END IF;
+END
+$$
+@@

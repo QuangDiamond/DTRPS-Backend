@@ -70,6 +70,12 @@ public class CloudinaryImageStorage implements ImageStorage {
 
   @Override
   public String store(byte[] content, String contentType, String filename) {
+    return store(content, contentType, filename, null);
+  }
+
+  @Override
+  public String store(byte[] content, String contentType, String filename, String target) {
+    String folder = target == null || target.isBlank() ? this.folder : target.trim();
     if (account == null) {
       throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, NOT_CONFIGURED);
     }

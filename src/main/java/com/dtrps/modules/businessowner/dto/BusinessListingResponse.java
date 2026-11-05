@@ -4,6 +4,7 @@ import com.dtrps.modules.businessowner.entity.BusinessListing;
 import com.dtrps.modules.poi.dto.ImageDto;
 import com.dtrps.modules.poi.dto.OpeningHourDto;
 import com.dtrps.modules.poi.dto.PlaceDetails;
+import com.dtrps.modules.poi.dto.PlaceTypes;
 import com.dtrps.modules.poi.dto.PriceDto;
 import com.dtrps.modules.poi.dto.ReferenceItem;
 import com.dtrps.modules.poi.entity.Place;
@@ -33,6 +34,9 @@ public record BusinessListingResponse(
     List<ImageDto> images,
     ReferenceItem group,
     ReferenceItem category,
+    /** Every group / type of the place, the main one first */
+    List<ReferenceItem> groups,
+    List<PlaceTypes.Type> categories,
     ReferenceItem province,
     String placeStatus,
     String status,
@@ -45,6 +49,7 @@ public record BusinessListingResponse(
     Place place = listing.getPlace();
     PlaceCategory category = place.getCategory();
     PlaceCategory group = category == null ? null : category.getParent();
+    PlaceTypes types = PlaceTypes.of(category, place.getCategories());
     return new BusinessListingResponse(
         listing.getListingId(),
         listing.getBusiness().getBusinessId(),
@@ -62,6 +67,8 @@ public record BusinessListingResponse(
         details.images(),
         group == null ? null : new ReferenceItem(group.getCode(), group.getName()),
         category == null ? null : new ReferenceItem(category.getCode(), category.getName()),
+        types.groups(),
+        types.categories(),
         place.getProvince() == null
             ? null
             : new ReferenceItem(place.getProvince().getCode(), place.getProvince().getName()),
