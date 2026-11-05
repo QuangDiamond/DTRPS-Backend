@@ -98,3 +98,37 @@ LEFT JOIN itinerary_days d ON d.itinerary_id = it.itinerary_id
 LEFT JOIN itinerary_items i ON i.day_id = d.day_id
 GROUP BY it.itinerary_id, it.currency
 @@
+
+
+-- Sở thích trải nghiệm của Travel Plan
+-- Lưu các code từ place_categories dưới dạng JSONB.
+
+    ALTER TABLE travel_plans
+    ADD COLUMN IF NOT EXISTS category_codes JSONB DEFAULT '[]'::jsonb
+    @@
+
+-- Kế hoạch cũ chưa có danh mục sẽ mặc định là mảng rỗng.
+    UPDATE travel_plans
+SET category_codes = '[]'::jsonb
+WHERE category_codes IS NULL
+    @@
+
+    ALTER TABLE travel_plans
+ALTER COLUMN category_codes SET DEFAULT '[]'::jsonb
+@@
+
+ALTER TABLE travel_plans
+ALTER COLUMN category_codes SET NOT NULL
+@@
+
+
+
+-- Nhịp độ chuyến đi của Traveller
+-- Dùng cho thuật toán tự động sắp xếp lịch trình.
+
+ALTER TABLE travel_plans
+ADD COLUMN IF NOT EXISTS travel_pace VARCHAR(20)
+NOT NULL DEFAULT 'BALANCED'
+@@
+
+
