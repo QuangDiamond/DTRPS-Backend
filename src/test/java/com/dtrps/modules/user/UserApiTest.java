@@ -99,6 +99,42 @@ class UserApiTest extends ApiTestBase {
   }
 
   @Test
+  @DisplayName("favorites: save, list and remove — saving or removing twice is not an error")
+  void favorites_roundTrip() throws Exception {
+    String token = travellerToken();
+    Long placeId =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO places (name, status) VALUES (?, 'ACTIVE') RETURNING place_id",
+            Long.class,
+            "Test Favorite Place");
+
+    putAs("/api/users/me/favorites/" + placeId, token, null).andExpect(status().isNoContent());
+    putAs("/api/users/me/favorites/" + placeId, token, null).andExpect(status().isNoContent());
+
+    getAs("/api/users/me/favorites", token)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value(1))
+        .andExpect(jsonPath("$.items.length()").value(1))
+        .andExpect(jsonPath("$.items[0].id").value(placeId.intValue()));
+
+    deleteAs("/api/users/me/favorites/" + placeId, token).andExpect(status().isNoContent());
+    deleteAs("/api/users/me/favorites/" + placeId, token).andExpect(status().isNoContent());
+
+    getAs("/api/users/me/favorites", token)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value(0))
+        .andExpect(jsonPath("$.items.length()").value(0));
+  }
+
+  @Test
+  @DisplayName("favorites: saving an unknown place is a 404")
+  void favorites_unknownPlace_returnsNotFound() throws Exception {
+    String token = travellerToken();
+
+    putAs("/api/users/me/favorites/999999999", token, null).andExpect(status().isNotFound());
+  }
+
+  @Test
   @DisplayName("change password replaces the password and ends every session")
   void changePassword_success_endsSessions() throws Exception {
     String email = uniqueEmail();
