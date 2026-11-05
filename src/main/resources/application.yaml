@@ -7,8 +7,13 @@ spring:
   # This DB also serves the live API. Set DB_URL, DB_USER and DB_PASSWORD to use another one.
   datasource:
     url: ${DB_URL:jdbc:postgresql://72.61.114.184:5433/dtrps}
-    username: ${DB_USER:dtrps}
-    password: ${DB_PASSWORD:a7d28d57312d4131b8504042ccee2ea77d50fea2e57b0e48}
+    username: ${DB_USER:dtrps_team}
+    password: ${DB_PASSWORD:f49f3ab926a3200c8c57748e7c7e187c3d1fdd8e928342eb}
+    # Mỗi BE chỉ giữ ít kết nối để cả nhóm dùng chung DB không bị "too many clients"
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:3}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      idle-timeout: 300000
 
   jpa:
     hibernate:
