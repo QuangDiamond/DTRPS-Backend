@@ -1,7 +1,7 @@
 spring:
   config:
     # Optional local secrets (gitignored), e.g. CLOUDINARY_URL=cloudinary://key:secret@cloud
-    import: optional:file:.env.local[.properties]
+    import: optional:file:.env.local.local[.properties]
 
   # Defaults point at the team's shared DB on the server, so the app runs without any setup.
   # This DB also serves the live API. Set DB_URL, DB_USER and DB_PASSWORD to use another one.
