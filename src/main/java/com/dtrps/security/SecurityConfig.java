@@ -44,7 +44,9 @@ public class SecurityConfig {
                     "/api/auth/register/complete",
                     "/api/auth/password/otp",
                     "/api/auth/password/verify",
-                    "/api/auth/password/reset");
+                    "/api/auth/password/reset",
+                    // Continue with Google (travellers and partners)
+                    "/api/auth/google");
 
     private static final UrlPathHelper PATH_HELPER = new UrlPathHelper();
     private static final int BCRYPT_STRENGTH = 12;

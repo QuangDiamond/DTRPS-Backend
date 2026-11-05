@@ -184,7 +184,8 @@ public class UserService {
     User user = new User();
     user.setFullName(name.trim());
     user.setEmail(normalizeEmail(email));
-    user.setPasswordHash(passwordEncoder.encode(rawPassword));
+    // null: tài khoản tạo qua Google, chưa có mật khẩu (đặt sau bằng Quên mật khẩu)
+    user.setPasswordHash(rawPassword == null ? null : passwordEncoder.encode(rawPassword));
     user.getRoles().add(role);
     return userRepository.saveAndFlush(user);
   }
