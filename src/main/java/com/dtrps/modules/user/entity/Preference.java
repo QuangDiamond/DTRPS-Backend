@@ -1,6 +1,6 @@
 package com.dtrps.modules.user.entity;
 
-import com.dtrps.modules.poi.entity.Interest;
+import com.dtrps.modules.poi.entity.PlaceCategory;
 import com.dtrps.modules.poi.entity.SpecialNeed;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,18 +19,11 @@ import java.util.HashSet;
 import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.Check;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
 @Table(name = "preferences")
-@Check(
-    name = "chk_preference_budget_level",
-    constraints = "budget_level IN ('SAVING', 'MEDIUM', 'LUXURY')")
-@Check(
-    name = "chk_preference_travel_style",
-    constraints = "travel_style IN ('RELAX', 'ADVENTURE', 'CULTURE', 'FAMILY', 'SOLO', 'LUXURY')")
 @Getter
 @Setter
 public class Preference {
@@ -43,12 +36,6 @@ public class Preference {
   @JoinColumn(name = "user_id", nullable = false, unique = true)
   private User user;
 
-  @Column(name = "travel_style", length = 100)
-  private String travelStyle;
-
-  @Column(name = "budget_level", length = 50)
-  private String budgetLevel;
-
   @Column(name = "notes", columnDefinition = "text")
   private String notes;
 
@@ -57,13 +44,14 @@ public class Preference {
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt;
 
+  /** Experience types (place subtypes) the traveller is interested in. */
   @ManyToMany(fetch = FetchType.LAZY)
   @JoinTable(
-      name = "preference_interests",
-      indexes = @Index(name = "idx_preference_interests_interest", columnList = "interest_id"),
+      name = "preference_interest_categories",
+      indexes = @Index(name = "idx_preference_interest_categories", columnList = "category_id"),
       joinColumns = @JoinColumn(name = "preference_id"),
-      inverseJoinColumns = @JoinColumn(name = "interest_id"))
-  private Set<Interest> interests = new HashSet<>();
+      inverseJoinColumns = @JoinColumn(name = "category_id"))
+  private Set<PlaceCategory> interests = new HashSet<>();
 
   @ManyToMany(fetch = FetchType.LAZY)
   @JoinTable(
