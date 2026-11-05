@@ -4,7 +4,6 @@ import com.dtrps.modules.poi.dto.CategoryGroupResponse;
 import com.dtrps.modules.poi.dto.ProvinceResponse;
 import com.dtrps.modules.poi.dto.ReferenceItem;
 import com.dtrps.modules.poi.entity.PlaceCategory;
-import com.dtrps.modules.poi.repository.InterestRepository;
 import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
 import com.dtrps.modules.poi.repository.ProvinceRepository;
 import com.dtrps.modules.poi.repository.SpecialNeedRepository;
@@ -29,17 +28,14 @@ public class ReferenceDataService {
 
   private final ProvinceRepository provinceRepository;
   private final PlaceCategoryRepository categoryRepository;
-  private final InterestRepository interestRepository;
   private final SpecialNeedRepository specialNeedRepository;
 
   public ReferenceDataService(
       ProvinceRepository provinceRepository,
       PlaceCategoryRepository categoryRepository,
-      InterestRepository interestRepository,
       SpecialNeedRepository specialNeedRepository) {
     this.provinceRepository = provinceRepository;
     this.categoryRepository = categoryRepository;
-    this.interestRepository = interestRepository;
     this.specialNeedRepository = specialNeedRepository;
   }
 
@@ -86,11 +82,11 @@ public class ReferenceDataService {
         .toList();
   }
 
-  /** Travel interests for the traveller's preferences screen and search filters. */
+  /** Experience types (place subtypes) for the traveller's preferences screen and search filters. */
   @Transactional(readOnly = true)
   public List<ReferenceItem> interests() {
-    return interestRepository.findAllByOrderByInterestIdAsc().stream()
-        .map(interest -> new ReferenceItem(interest.getCode(), interest.getName()))
+    return categoryRepository.findByStatusAndParentIsNotNullOrderByCategoryIdAsc(ACTIVE).stream()
+        .map(type -> new ReferenceItem(type.getCode(), type.getName()))
         .toList();
   }
 

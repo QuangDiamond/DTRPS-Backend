@@ -77,22 +77,16 @@ class UserApiTest extends ApiTestBase {
             "/api/users/me/preferences",
             token,
             Map.of(
-                "budgetLevel", "MEDIUM",
-                "travelStyle", "RELAX",
-                "interests", List.of("food", "nature"),
+                "interests", List.of("restaurant", "scenicSpot"),
                 "specialNeeds", List.of("kids")))
         .andExpect(status().isOk());
 
-    putAs(
-            "/api/users/me/preferences",
-            token,
-            Map.of("budgetLevel", "LUXURY", "interests", List.of("beach")))
+    putAs("/api/users/me/preferences", token, Map.of("interests", List.of("heritage")))
         .andExpect(status().isOk());
 
     getAs("/api/users/me/preferences", token)
-        .andExpect(jsonPath("$.budgetLevel").value("LUXURY"))
         .andExpect(jsonPath("$.interests.length()").value(1))
-        .andExpect(jsonPath("$.interests[0]").value("beach"));
+        .andExpect(jsonPath("$.interests[0]").value("heritage"));
   }
 
   @Test
@@ -101,8 +95,6 @@ class UserApiTest extends ApiTestBase {
     String token = travellerToken();
 
     putAs("/api/users/me/preferences", token, Map.of("interests", List.of("not-a-code")))
-        .andExpect(status().isBadRequest());
-    putAs("/api/users/me/preferences", token, Map.of("budgetLevel", "HUGE"))
         .andExpect(status().isBadRequest());
   }
 
