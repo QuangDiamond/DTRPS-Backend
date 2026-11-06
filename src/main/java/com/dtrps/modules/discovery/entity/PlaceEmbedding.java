@@ -44,7 +44,8 @@ public class PlaceEmbedding {
 
   @Column(name = "source_hash", length = 64)
   private String sourceHash;
-
+@Column(name = "model", length = 64)
+private String model;
   @CreationTimestamp
   @ColumnDefault("now()")
   @Column(name = "created_at", nullable = false)

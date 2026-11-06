@@ -88,3 +88,8 @@ app:
     # A verified code gives a one-time ticket to finish sign-up / set the new password
     ticket-ttl: ${OTP_TICKET_TTL:15m}
     from-name: SmartTravel
+  # AI recommendation: OpenAI embeddings. Put OPENAI_API_KEY in .env.local.
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
