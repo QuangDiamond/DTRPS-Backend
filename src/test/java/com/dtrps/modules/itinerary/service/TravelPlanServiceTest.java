@@ -3,7 +3,6 @@ package com.dtrps.modules.itinerary.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -13,13 +12,11 @@ import static org.mockito.Mockito.when;
 
 import com.dtrps.exception.ApiException;
 import com.dtrps.modules.itinerary.dto.TravelPlanDtos;
-import com.dtrps.modules.itinerary.entity.PlanInterest;
 import com.dtrps.modules.itinerary.entity.TravelPlan;
 import com.dtrps.modules.itinerary.repository.ItineraryRepository;
 import com.dtrps.modules.itinerary.repository.PlanInterestRepository;
 import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
-import com.dtrps.modules.poi.entity.Interest;
-import com.dtrps.modules.poi.repository.InterestRepository;
+import com.dtrps.modules.poi.entity.PlaceCategory;
 import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
 import com.dtrps.modules.user.entity.User;
 import com.dtrps.modules.user.repository.UserRepository;
@@ -33,7 +30,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -53,7 +49,6 @@ class TravelPlanServiceTest {
   @Mock private ItineraryRepository itineraryRepository;
   @Mock private UserRepository userRepository;
   @Mock private PlaceCategoryRepository categoryRepository;
-  @Mock private InterestRepository interestRepository;
 
   private TravelPlanService service;
   private User owner;
@@ -66,8 +61,7 @@ class TravelPlanServiceTest {
             planInterestRepository,
             itineraryRepository,
             userRepository,
-            categoryRepository,
-            interestRepository);
+            categoryRepository);
     owner = new User();
     owner.setUserId(OWNER_ID);
   }
@@ -92,15 +86,23 @@ class TravelPlanServiceTest {
         .thenReturn(Optional.of(plan));
   }
 
-  private static Interest interest(long id, String code) {
-    Interest interest = new Interest();
-    interest.setInterestId(id);
-    interest.setCode(code);
-    interest.setName(code);
-    return interest;
+  /** Loại hình con ACTIVE có nhóm cha ACTIVE: những mã được chọn làm sở thích của chuyến. */
+  private void givenActiveCategories(String... codes) {
+    PlaceCategory parent = new PlaceCategory();
+    parent.setCode("attraction");
+    parent.setStatus("ACTIVE");
+    List<PlaceCategory> children = new ArrayList<>();
+    for (String code : codes) {
+      PlaceCategory child = new PlaceCategory();
+      child.setCode(code);
+      child.setStatus("ACTIVE");
+      child.setParent(parent);
+      children.add(child);
+    }
+    when(categoryRepository.findByStatusOrderByCategoryIdAsc("ACTIVE")).thenReturn(children);
   }
 
-  private static TravelPlanDtos.CreateRequest createRequest(List<String> interestCodes) {
+  private static TravelPlanDtos.CreateRequest createRequest(List<String> categoryCodes) {
     return new TravelPlanDtos.CreateRequest(
         "  Đà Lạt cuối năm  ",
         " Đà Lạt ",
@@ -110,15 +112,14 @@ class TravelPlanServiceTest {
         "vnd",
         2,
         "Đi cùng bạn",
-        null,
-        interestCodes,
+        categoryCodes,
         null);
   }
 
   private static TravelPlanDtos.UpdateRequest updateRequest(
-      String destination, LocalDate start, LocalDate end, List<String> interestCodes) {
+      String destination, LocalDate start, LocalDate end, List<String> categoryCodes) {
     return new TravelPlanDtos.UpdateRequest(
-        "Tên mới", destination, start, end, null, null, null, null, null, interestCodes, "PACKED");
+        "Tên mới", destination, start, end, null, null, null, null, categoryCodes, "PACKED");
   }
 
   private static void assertApiError(Throwable thrown, HttpStatus status, String message) {
@@ -133,11 +134,10 @@ class TravelPlanServiceTest {
   class Create {
 
     @Test
-    @DisplayName("Lưu kế hoạch DRAFT và các sở thích vào plan_interests")
-    void createsDraftWithInterests() {
+    @DisplayName("Lưu kế hoạch DRAFT, sở thích lưu vào categoryCodes")
+    void createsDraftWithCategories() {
       when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
-      when(interestRepository.findByCodeIn(List.of("food", "nature")))
-          .thenReturn(List.of(interest(2, "nature"), interest(1, "food")));
+      givenActiveCategories("beach", "nightMarket");
       when(planRepository.saveAndFlush(any()))
           .thenAnswer(
               inv -> {
@@ -147,50 +147,41 @@ class TravelPlanServiceTest {
               });
 
       TravelPlanDtos.PlanResponse response =
-          service.create(OWNER_ID, createRequest(List.of("food", "nature")));
+          service.create(OWNER_ID, createRequest(List.of("nightMarket", "beach")));
 
       assertThat(response.status()).isEqualTo("DRAFT");
       assertThat(response.title()).isEqualTo("Đà Lạt cuối năm");
       assertThat(response.destination()).isEqualTo("Đà Lạt");
       assertThat(response.currency()).isEqualTo("VND");
       assertThat(response.travelPace()).isEqualTo("BALANCED");
-      assertThat(response.interestCodes()).containsExactly("food", "nature");
+      assertThat(response.categoryCodes()).containsExactly("nightMarket", "beach");
       assertThat(response.allowedNextStatuses()).containsExactly("PLANNED", "CANCELLED");
-
-      @SuppressWarnings("unchecked")
-      ArgumentCaptor<List<PlanInterest>> rows = ArgumentCaptor.forClass(List.class);
-      verify(planInterestRepository).saveAll(rows.capture());
-      assertThat(rows.getValue())
-          .extracting(pi -> pi.getInterest().getCode())
-          .containsExactly("food", "nature");
-      assertThat(rows.getValue()).allMatch(pi -> pi.getPlan().getPlanId().equals(PLAN_ID));
+      verifyNoInteractions(planInterestRepository);
     }
 
     @Test
-    @DisplayName("Sở thích không tồn tại thì báo lỗi và không lưu gì")
-    void rejectsUnknownInterest() {
+    @DisplayName("Sở thích không phải loại hình con ACTIVE thì báo lỗi và không lưu gì")
+    void rejectsUnknownCategory() {
       when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
-      when(interestRepository.findByCodeIn(any())).thenReturn(List.of(interest(1, "food")));
+      givenActiveCategories("beach");
 
       Throwable thrown =
-          catchThrowable(
-              () -> service.create(OWNER_ID, createRequest(List.of("food", "ghost"))));
+          catchThrowable(() -> service.create(OWNER_ID, createRequest(List.of("beach", "ghost"))));
 
-      assertApiError(thrown, HttpStatus.BAD_REQUEST, "Sở thích không hợp lệ: ghost");
+      assertApiError(thrown, HttpStatus.BAD_REQUEST, "Danh mục trải nghiệm không hợp lệ: ghost");
       verify(planRepository, never()).saveAndFlush(any());
     }
 
     @Test
     @DisplayName("Sở thích bị trùng thì báo lỗi")
-    void rejectsDuplicateInterest() {
+    void rejectsDuplicateCategory() {
       when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
 
       Throwable thrown =
-          catchThrowable(
-              () -> service.create(OWNER_ID, createRequest(List.of("food", "food"))));
+          catchThrowable(() -> service.create(OWNER_ID, createRequest(List.of("beach", "beach"))));
 
-      assertApiError(thrown, HttpStatus.BAD_REQUEST, "Sở thích bị trùng: food");
-      verifyNoInteractions(interestRepository);
+      assertApiError(thrown, HttpStatus.BAD_REQUEST, "Danh mục trải nghiệm bị trùng: beach");
+      verifyNoInteractions(categoryRepository);
     }
 
     @Test
@@ -199,7 +190,7 @@ class TravelPlanServiceTest {
       when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
       TravelPlanDtos.CreateRequest bad =
           new TravelPlanDtos.CreateRequest(
-              "A", "B", END, START, null, null, null, null, null, null, null);
+              "A", "B", END, START, null, null, null, null, null, null);
 
       Throwable thrown =
           catchThrowable(() -> service.create(OWNER_ID, bad));
@@ -228,34 +219,20 @@ class TravelPlanServiceTest {
     }
 
     @Test
-    @DisplayName("Danh sách lấy sở thích của mọi kế hoạch trong một truy vấn")
-    void listLoadsInterestsOnce() {
+    @DisplayName("Danh sách chỉ gồm kế hoạch của mình, giữ thứ tự từ repository")
+    void listsOwnPlans() {
       TravelPlan first = plan("DRAFT");
       TravelPlan second = plan("PLANNED");
       second.setPlanId(6L);
       when(planRepository.findByUserUserIdOrderByCreatedAtDesc(OWNER_ID))
           .thenReturn(List.of(first, second));
-      PlanInterest row = new PlanInterest();
-      row.setPlan(second);
-      row.setInterest(interest(1, "food"));
-      when(planInterestRepository.findWithInterestByPlanIds(List.of(PLAN_ID, 6L)))
-          .thenReturn(List.of(row));
 
       List<TravelPlanDtos.PlanResponse> plans = service.getMyPlans(OWNER_ID);
 
-      assertThat(plans).hasSize(2);
-      assertThat(plans.get(0).interestCodes()).isEmpty();
-      assertThat(plans.get(1).interestCodes()).containsExactly("food");
-      verify(planInterestRepository).findWithInterestByPlanIds(anyCollection());
-    }
-
-    @Test
-    @DisplayName("Không có kế hoạch thì không truy vấn sở thích")
-    void emptyList() {
-      when(planRepository.findByUserUserIdOrderByCreatedAtDesc(OWNER_ID)).thenReturn(List.of());
-
-      assertThat(service.getMyPlans(OWNER_ID)).isEmpty();
-      verifyNoInteractions(planInterestRepository);
+      assertThat(plans)
+          .extracting(TravelPlanDtos.PlanResponse::planId)
+          .containsExactly(PLAN_ID, 6L);
+      assertThat(plans.get(1).allowedNextStatuses()).containsExactly("IN_PROGRESS", "CANCELLED");
     }
   }
 
@@ -267,23 +244,22 @@ class TravelPlanServiceTest {
 
     @Test
     @DisplayName("Sửa được khi PLANNED và thay toàn bộ sở thích")
-    void updatesAndReplacesInterests() {
-      givenOwnedPlan(plan("PLANNED"));
-      when(interestRepository.findByCodeIn(List.of("culture")))
-          .thenReturn(List.of(interest(3, "culture")));
+    void updatesAndReplacesCategories() {
+      TravelPlan planned = plan("PLANNED");
+      planned.setCategoryCodes(new ArrayList<>(List.of("beach")));
+      givenOwnedPlan(planned);
+      givenActiveCategories("beach", "heritage");
       when(planRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
       TravelPlanDtos.PlanResponse response =
           service.update(
-              OWNER_ID, PLAN_ID, updateRequest("Đà Lạt", START, END, List.of("culture")));
+              OWNER_ID, PLAN_ID, updateRequest("Đà Lạt", START, END, List.of("heritage")));
 
       assertThat(response.title()).isEqualTo("Tên mới");
       assertThat(response.travelPace()).isEqualTo("PACKED");
       assertThat(response.status()).isEqualTo("PLANNED");
-      assertThat(response.interestCodes()).containsExactly("culture");
-      InOrder order = inOrder(planInterestRepository);
-      order.verify(planInterestRepository).deleteByPlanId(PLAN_ID);
-      order.verify(planInterestRepository).saveAll(any());
+      assertThat(response.categoryCodes()).containsExactly("heritage");
+      verifyNoInteractions(planInterestRepository);
     }
 
     @Test

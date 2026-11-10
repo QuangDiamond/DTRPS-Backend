@@ -2,26 +2,20 @@ package com.dtrps.modules.itinerary.service;
 
 import com.dtrps.exception.ApiException;
 import com.dtrps.modules.itinerary.dto.TravelPlanDtos;
-import com.dtrps.modules.itinerary.entity.PlanInterest;
 import com.dtrps.modules.itinerary.entity.TravelPlan;
 import com.dtrps.modules.itinerary.repository.ItineraryRepository;
 import com.dtrps.modules.itinerary.repository.PlanInterestRepository;
 import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
-import com.dtrps.modules.poi.entity.Interest;
 import com.dtrps.modules.poi.entity.PlaceCategory;
-import com.dtrps.modules.poi.repository.InterestRepository;
 import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
 import com.dtrps.modules.user.entity.User;
 import com.dtrps.modules.user.repository.UserRepository;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -51,21 +45,18 @@ public class TravelPlanService {
   private final ItineraryRepository itineraryRepository;
   private final UserRepository userRepository;
   private final PlaceCategoryRepository categoryRepository;
-  private final InterestRepository interestRepository;
 
   public TravelPlanService(
       TravelPlanRepository planRepository,
       PlanInterestRepository planInterestRepository,
       ItineraryRepository itineraryRepository,
       UserRepository userRepository,
-      PlaceCategoryRepository categoryRepository,
-      InterestRepository interestRepository) {
+      PlaceCategoryRepository categoryRepository) {
     this.planRepository = planRepository;
     this.planInterestRepository = planInterestRepository;
     this.itineraryRepository = itineraryRepository;
     this.userRepository = userRepository;
     this.categoryRepository = categoryRepository;
-    this.interestRepository = interestRepository;
   }
 
   // ---------------------------------------------------------------- Tạo
@@ -78,48 +69,26 @@ public class TravelPlanService {
             .orElseThrow(
                 () -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy người dùng"));
 
-    List<Interest> interests = resolveInterests(request.interestCodes());
-
     TravelPlan plan = new TravelPlan();
     plan.setUser(user);
     plan.setStatus(TravelPlanStatus.DRAFT);
     applyFields(plan, request);
 
-    TravelPlan saved = planRepository.saveAndFlush(plan);
-    saveInterests(saved, interests);
-
-    return toResponse(saved, codesOf(interests));
+    return toResponse(planRepository.saveAndFlush(plan));
   }
 
   // ---------------------------------------------------------------- Xem
 
   @Transactional(readOnly = true)
   public List<TravelPlanDtos.PlanResponse> getMyPlans(Long userId) {
-    List<TravelPlan> plans = planRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
-    if (plans.isEmpty()) {
-      return List.of();
-    }
-
-    // Lấy sở thích của mọi kế hoạch trong một truy vấn
-    Map<Long, List<String>> interestsByPlan =
-        planInterestRepository
-            .findWithInterestByPlanIds(plans.stream().map(TravelPlan::getPlanId).toList())
-            .stream()
-            .collect(
-                Collectors.groupingBy(
-                    pi -> pi.getPlan().getPlanId(),
-                    LinkedHashMap::new,
-                    Collectors.mapping(pi -> pi.getInterest().getCode(), Collectors.toList())));
-
-    return plans.stream()
-        .map(plan -> toResponse(plan, interestsByPlan.getOrDefault(plan.getPlanId(), List.of())))
+    return planRepository.findByUserUserIdOrderByCreatedAtDesc(userId).stream()
+        .map(this::toResponse)
         .toList();
   }
 
   @Transactional(readOnly = true)
   public TravelPlanDtos.PlanResponse getById(Long userId, Long planId) {
-    TravelPlan plan = findOwnedPlan(userId, planId);
-    return toResponse(plan, loadInterestCodes(planId));
+    return toResponse(findOwnedPlan(userId, planId));
   }
 
   // ---------------------------------------------------------------- Sửa
@@ -143,15 +112,8 @@ public class TravelPlanService {
       throw new ApiException(HttpStatus.CONFLICT, ITINERARY_LOCKS_TRIP);
     }
 
-    List<Interest> interests = resolveInterests(request.interestCodes());
     applyFields(plan, request);
-    TravelPlan saved = planRepository.saveAndFlush(plan);
-
-    // Sở thích gửi lên thay thế toàn bộ danh sách cũ
-    planInterestRepository.deleteByPlanId(planId);
-    saveInterests(saved, interests);
-
-    return toResponse(saved, codesOf(interests));
+    return toResponse(planRepository.saveAndFlush(plan));
   }
 
   // ---------------------------------------------------------------- Xóa
@@ -172,7 +134,7 @@ public class TravelPlanService {
     planRepository.deleteItineraryDaysByPlanId(planId);
     planRepository.deleteItinerariesByPlanId(planId);
     planRepository.deletePlanPlacesByPlanId(planId);
-    planInterestRepository.deleteByPlanId(planId);
+    planInterestRepository.deleteByPlanId(planId); // dòng cũ, nếu có
     planRepository.deleteTripFeedbackByPlanId(planId);
     planRepository.deletePlanById(planId);
   }
@@ -202,8 +164,7 @@ public class TravelPlanService {
     }
 
     plan.setStatus(newStatus);
-    TravelPlan saved = planRepository.saveAndFlush(plan);
-    return toResponse(saved, loadInterestCodes(planId));
+    return toResponse(planRepository.saveAndFlush(plan));
   }
 
   // ---------------------------------------------------------------- Hàm phụ
@@ -235,7 +196,10 @@ public class TravelPlanService {
     plan.setTravelPace(fields.travelPace() == null ? "BALANCED" : fields.travelPace());
   }
 
-  /** Chỉ nhận loại địa điểm con ACTIVE, có nhóm cha cũng ACTIVE. */
+  /**
+   * Sở thích của chuyến: chỉ nhận loại địa điểm con ACTIVE, có nhóm cha cũng ACTIVE (giống sở
+   * thích của người dùng).
+   */
   private List<String> validateCategoryCodes(List<String> requestedCodes) {
     if (requestedCodes == null || requestedCodes.isEmpty()) {
       return List.of();
@@ -258,28 +222,6 @@ public class TravelPlanService {
     return List.copyOf(requestedCodes);
   }
 
-  /** Đổi mã sở thích thành entity Interest, giữ thứ tự gửi lên. */
-  private List<Interest> resolveInterests(List<String> requestedCodes) {
-    if (requestedCodes == null || requestedCodes.isEmpty()) {
-      return List.of();
-    }
-    checkCodeList(requestedCodes, "Sở thích");
-
-    Map<String, Interest> byCode =
-        interestRepository.findByCodeIn(requestedCodes).stream()
-            .collect(Collectors.toMap(Interest::getCode, Function.identity()));
-
-    List<Interest> result = new ArrayList<>(requestedCodes.size());
-    for (String code : requestedCodes) {
-      Interest interest = byCode.get(code);
-      if (interest == null) {
-        throw new ApiException(HttpStatus.BAD_REQUEST, "Sở thích không hợp lệ: " + code);
-      }
-      result.add(interest);
-    }
-    return result;
-  }
-
   /** Kiểm tra số lượng, mã rỗng và mã trùng. */
   private static void checkCodeList(List<String> codes, String label) {
     if (codes.size() > MAX_CODES) {
@@ -295,33 +237,6 @@ public class TravelPlanService {
         throw new ApiException(HttpStatus.BAD_REQUEST, label + " bị trùng: " + code);
       }
     }
-  }
-
-  private void saveInterests(TravelPlan plan, List<Interest> interests) {
-    if (interests.isEmpty()) {
-      return;
-    }
-    List<PlanInterest> rows =
-        interests.stream()
-            .map(
-                interest -> {
-                  PlanInterest row = new PlanInterest();
-                  row.setPlan(plan);
-                  row.setInterest(interest);
-                  return row;
-                })
-            .toList();
-    planInterestRepository.saveAll(rows);
-  }
-
-  private List<String> loadInterestCodes(Long planId) {
-    return planInterestRepository.findWithInterestByPlanIds(List.of(planId)).stream()
-        .map(pi -> pi.getInterest().getCode())
-        .toList();
-  }
-
-  private static List<String> codesOf(List<Interest> interests) {
-    return interests.stream().map(Interest::getCode).toList();
   }
 
   private static String trimmed(String value) {
@@ -348,7 +263,7 @@ public class TravelPlanService {
         + next.stream().map(TravelPlanService::label).collect(Collectors.joining(", "));
   }
 
-  private TravelPlanDtos.PlanResponse toResponse(TravelPlan plan, List<String> interestCodes) {
+  private TravelPlanDtos.PlanResponse toResponse(TravelPlan plan) {
     List<String> categories =
         plan.getCategoryCodes() == null ? List.of() : List.copyOf(plan.getCategoryCodes());
 
@@ -364,7 +279,6 @@ public class TravelPlanService {
         plan.getGroupSize(),
         plan.getDescription(),
         categories,
-        List.copyOf(interestCodes),
         plan.getTravelPace(),
         plan.getStatus(),
         TravelPlanStatus.allowedNext(plan.getStatus()),
