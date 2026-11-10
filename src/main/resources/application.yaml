@@ -1,14 +1,14 @@
 spring:
   config:
     # Optional local secrets (gitignored), e.g. CLOUDINARY_URL=cloudinary://key:secret@cloud
-    import: optional:file:.env.local.local[.properties]
+    import: optional:file:.env.local[.properties]
 
   # Defaults point at the team's shared DB on the server, so the app runs without any setup.
   # This DB also serves the live API. Set DB_URL, DB_USER and DB_PASSWORD to use another one.
   datasource:
-    url: ${DB_URL:jdbc:postgresql://72.61.114.184:5433/dtrps}
-    username: ${DB_USER:dtrps_team}
-    password: ${DB_PASSWORD:f49f3ab926a3200c8c57748e7c7e187c3d1fdd8e928342eb}
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/dtrps}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:123}
     # Mỗi BE chỉ giữ ít kết nối để cả nhóm dùng chung DB không bị "too many clients"
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:3}
