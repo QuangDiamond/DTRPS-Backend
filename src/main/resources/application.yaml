@@ -6,9 +6,9 @@ spring:
   # Defaults point at the team's shared DB on the server, so the app runs without any setup.
   # This DB also serves the live API. Set DB_URL, DB_USER and DB_PASSWORD to use another one.
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5433/dtrps}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:123}
+    url: ${DB_URL:jdbc:postgresql://72.62.65.80:5433/dtrps}
+    username: ${DB_USER:dtrps_user}
+    password: ${DB_PASSWORD:10e970aa7e61778abad7763559a09a2ab3cfba53a11fda62}
     # Mỗi BE chỉ giữ ít kết nối để cả nhóm dùng chung DB không bị "too many clients"
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:3}
