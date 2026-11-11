@@ -262,6 +262,11 @@ public class ItineraryOverviewService {
                 place.getPlaceId(),
                 place.getName(),
                 place.getAddress(),
+
+                // BƯỚC 14: Tọa độ thật của điểm đến
+                place.getLatitude(),
+                place.getLongitude(),
+
                 item.getStartTime(),
                 item.getEndTime(),
                 item.getEstimatedCost(),

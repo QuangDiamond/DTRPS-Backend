@@ -6,17 +6,30 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
+/**
+ * DTO tra ve lich trinh, tung ngay va hoat dong
+ * de hien thi tren Web va Goong Map.
+ */
 public final class ItineraryOverviewDtos {
 
     private ItineraryOverviewDtos() {}
 
-    // Thông tin một hoạt động trong ngày
+    /**
+     * Thong tin mot hoat dong trong ngay.
+     *
+     * latitude/longitude la toa do cua dia diem,
+     * khong phai vi tri GPS cua Traveller.
+     *
+     * Co the null neu Place chua co toa do.
+     */
     public record ActivityResponse(
             Long itemId,
             Integer itemOrder,
             Long placeId,
             String placeName,
             String placeAddress,
+            Double latitude,
+            Double longitude,
             LocalTime startTime,
             LocalTime endTime,
             BigDecimal estimatedCost,
@@ -25,9 +38,52 @@ public final class ItineraryOverviewDtos {
             Integer travelTimeMinutes,
             String notes,
             String status
-    ) {}
+    ) {
 
-    // Thông tin ngày và tổng chi phí của ngày
+        /**
+         * Constructor tuong thich voi Service hien tai.
+         *
+         * Buoc 14 se cap nhat Service de truyen
+         * latitude va longitude that tu Place.
+         */
+        public ActivityResponse(
+                Long itemId,
+                Integer itemOrder,
+                Long placeId,
+                String placeName,
+                String placeAddress,
+                LocalTime startTime,
+                LocalTime endTime,
+                BigDecimal estimatedCost,
+                Long transportModeId,
+                String transportModeName,
+                Integer travelTimeMinutes,
+                String notes,
+                String status
+        ) {
+            this(
+                    itemId,
+                    itemOrder,
+                    placeId,
+                    placeName,
+                    placeAddress,
+                    null,
+                    null,
+                    startTime,
+                    endTime,
+                    estimatedCost,
+                    transportModeId,
+                    transportModeName,
+                    travelTimeMinutes,
+                    notes,
+                    status
+            );
+        }
+    }
+
+    /**
+     * Thong tin ngay va tong chi phi cua ngay.
+     */
     public record DayResponse(
             Long dayId,
             Integer dayNumber,
@@ -38,7 +94,9 @@ public final class ItineraryOverviewDtos {
             List<ActivityResponse> activities
     ) {}
 
-    // Thông tin lịch trình và tổng chi phí chuyến đi
+    /**
+     * Thong tin lich trinh va tong chi phi chuyen di.
+     */
     public record OverviewResponse(
             Long itineraryId,
             Long planId,
