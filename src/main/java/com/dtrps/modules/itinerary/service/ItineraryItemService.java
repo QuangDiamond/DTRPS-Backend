@@ -5,8 +5,11 @@ import com.dtrps.exception.ApiException;
 import com.dtrps.modules.itinerary.dto.ItineraryItemDtos;
 import com.dtrps.modules.itinerary.entity.ItineraryDay;
 import com.dtrps.modules.itinerary.entity.ItineraryItem;
+import com.dtrps.modules.itinerary.entity.TravelPlan;
 import com.dtrps.modules.itinerary.repository.ItineraryDayRepository;
 import com.dtrps.modules.itinerary.repository.ItineraryItemRepository;
+import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
+import com.dtrps.modules.itinerary.repository.TripProgressRepository;
 import com.dtrps.modules.poi.entity.Place;
 import com.dtrps.modules.poi.entity.TransportMode;
 import com.dtrps.modules.poi.repository.PlaceRepository;
@@ -29,6 +32,8 @@ public class ItineraryItemService {
 
     private final ItineraryDayRepository dayRepository;
     private final ItineraryItemRepository itemRepository;
+    private final TravelPlanRepository planRepository;
+    private final TripProgressRepository tripProgressRepository;
     private final PlaceRepository placeRepository;
     private final TransportModeRepository transportRepository;
     private final EntityManager entityManager;
@@ -36,12 +41,16 @@ public class ItineraryItemService {
     public ItineraryItemService(
             ItineraryDayRepository dayRepository,
             ItineraryItemRepository itemRepository,
+            TravelPlanRepository planRepository,
+            TripProgressRepository tripProgressRepository,
             PlaceRepository placeRepository,
             TransportModeRepository transportRepository,
             EntityManager entityManager
     ) {
         this.dayRepository = dayRepository;
         this.itemRepository = itemRepository;
+        this.planRepository = planRepository;
+        this.tripProgressRepository = tripProgressRepository;
         this.placeRepository = placeRepository;
         this.transportRepository = transportRepository;
         this.entityManager = entityManager;
@@ -271,41 +280,94 @@ public class ItineraryItemService {
         entityManager.clear();
     }
 
-    // Kiểm tra quyền sở hữu và trạng thái lịch trình
+    /**
+     * Kiểm tra quyền sở hữu và trạng thái lịch trình.
+     *
+     * Khi ghi dữ liệu, khóa TravelPlan TRƯỚC khi khóa ItineraryDay.
+     * Đây là cùng thứ tự khóa với TripProgressService.startDay()
+     * và ItineraryService.create(), tránh sửa hoạt động trong lúc
+     * request khác bắt đầu chuyến đi hoặc tạo phiên bản mới.
+     */
     private ItineraryDay requireDay(
             Long userId,
             Long dayId,
             boolean forEditing
     ) {
-        ItineraryDay day = (
-                forEditing
-                        ? dayRepository.lockByDayId(dayId)
-                        : dayRepository.findById(dayId)
-        ).orElseThrow(() -> new ApiException(
-                HttpStatus.NOT_FOUND,
-                "Không tìm thấy ngày trong lịch trình"
-        ));
+        ItineraryDay day = dayRepository.findById(dayId)
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy ngày trong lịch trình"
+                ));
 
-        Long ownerId = day.getItinerary()
-                .getPlan()
-                .getUser()
-                .getUserId();
+        Long planId = day.getItinerary().getPlan().getPlanId();
 
-        if (!ownerId.equals(userId)) {
-            throw new ApiException(
-                    HttpStatus.NOT_FOUND,
-                    "Không tìm thấy ngày trong lịch trình"
-            );
-        }
+        if (forEditing) {
+            // Phải khóa TravelPlan trước khi kiểm tra đã bắt đầu hay chưa.
+            // Nếu không, request bắt đầu chuyến đi có thể chạy song song
+            // với request sửa/xóa/sắp xếp hoạt động.
+            TravelPlan lockedPlan = planRepository.lockById(planId)
+                    .orElseThrow(() -> new ApiException(
+                            HttpStatus.NOT_FOUND,
+                            "Không tìm thấy ngày trong lịch trình"
+                    ));
 
-        if (
-                forEditing &&
-                        !"ACTIVE".equals(day.getItinerary().getStatus())
-        ) {
-            throw new ApiException(
-                    HttpStatus.CONFLICT,
-                    "Chỉ được chỉnh sửa lịch trình ACTIVE"
-            );
+            if (!lockedPlan.getUser().getUserId().equals(userId)) {
+                throw new ApiException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy ngày trong lịch trình"
+                );
+            }
+
+            day = dayRepository.lockByDayId(dayId)
+                    .orElseThrow(() -> new ApiException(
+                            HttpStatus.NOT_FOUND,
+                            "Không tìm thấy ngày trong lịch trình"
+                    ));
+
+            if (!"ACTIVE".equals(day.getItinerary().getStatus())) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "Chỉ được chỉnh sửa lịch trình ACTIVE"
+                );
+            }
+
+            if (!TravelPlanStatus.isEditable(lockedPlan.getStatus())) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "Không thể chỉnh sửa hoạt động khi chuyến đi đang diễn ra hoặc đã kết thúc"
+                );
+            }
+
+            // Kiểm tra mọi phiên bản của kế hoạch, kể cả ARCHIVED.
+            // Chỉ khóa trạng thái kế hoạch là chưa đủ nếu một request cũ
+            // đã tạo TripProgress nhưng trạng thái TravelPlan chưa đồng bộ.
+            boolean tripStarted = tripProgressRepository
+                    .findByItineraryPlanPlanIdOrderByProgressIdAsc(planId)
+                    .stream()
+                    .anyMatch(progress ->
+                            progress.getStartedAt() != null
+                                    || progress.getCompletedAt() != null
+                                    || !"NOT_STARTED".equals(progress.getStatus())
+                    );
+
+            if (tripStarted) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "Chuyến đi đã bắt đầu, không thể chỉnh sửa hoạt động"
+                );
+            }
+        } else {
+            Long ownerId = day.getItinerary()
+                    .getPlan()
+                    .getUser()
+                    .getUserId();
+
+            if (!ownerId.equals(userId)) {
+                throw new ApiException(
+                        HttpStatus.NOT_FOUND,
+                        "Không tìm thấy ngày trong lịch trình"
+                );
+            }
         }
 
         return day;

@@ -12,7 +12,7 @@ effective-pom.xml
 .settings/
 
 # Environment and secrets
-.env
+.env.local
 .env.*
 !.env.example
 *.pem
