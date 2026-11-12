@@ -41,7 +41,6 @@ public class RecommendationService {
     private final EmbeddingGateway embeddingGateway;
     private final RecommendationCandidateRepository candidates;
     private final PlaceScorer scorer;
-    private final MmrDiversifier diversifier;
     private final PlaceImageRepository images;
 
     public RecommendationService(
@@ -50,7 +49,6 @@ public class RecommendationService {
             EmbeddingGateway embeddingGateway,
             RecommendationCandidateRepository candidates,
             PlaceScorer scorer,
-            MmrDiversifier diversifier,
             PlaceImageRepository images) {
 
         this.profileResolver = profileResolver;
@@ -58,7 +56,6 @@ public class RecommendationService {
         this.embeddingGateway = embeddingGateway;
         this.candidates = candidates;
         this.scorer = scorer;
-        this.diversifier = diversifier;
         this.images = images;
     }
 
@@ -102,6 +99,7 @@ public class RecommendationService {
                 candidates.findCandidates(
                     profile.planId(),
                     profile.destination(),
+                    profile.lodgingCodes(),
                     queryVector
                 );
 
@@ -124,7 +122,8 @@ public class RecommendationService {
             availableCandidates =
                 candidates.findRuleOnlyCandidates(
                     profile.planId(),
-                    profile.destination()
+                    profile.destination(),
+                    profile.lodgingCodes()
                 );
         }
 
@@ -160,18 +159,12 @@ public class RecommendationService {
             )
         );
 
-        // 8. MMR re-ranking.
-       
-List<ScoredCandidate> diversified =
-    diversifier.diversify(
-        scored,
-        recommendedCount,
-        needed
-    );
-
+        // 8. Xếp thẳng theo điểm: phù hợp nhất đứng đầu, giảm dần.
+        List<ScoredCandidate> ranked =
+            scored.subList(0, recommendedCount);
 
         // 9. Lấy ảnh chính cho các địa điểm.
-        List<Long> placeIds = diversified.stream()
+        List<Long> placeIds = ranked.stream()
             .map(s -> s.candidate().placeId())
             .toList();
 
@@ -191,10 +184,10 @@ List<ScoredCandidate> diversified =
         // 10. Chuyển thành response cho Frontend.
         List<RecommendedPlace> items = new ArrayList<>();
 
-        for (int i = 0; i < diversified.size(); i++) {
+        for (int i = 0; i < ranked.size(); i++) {
 
             ScoredCandidate scoredPlace =
-                diversified.get(i);
+                ranked.get(i);
 
             Candidate candidate =
                 scoredPlace.candidate();

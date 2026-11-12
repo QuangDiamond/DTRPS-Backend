@@ -36,7 +36,7 @@ Replace `<BACKEND_REPOSITORY_URL>` with the team's actual GitHub repository URL.
 
 ## 4. Database
 
-By default the app connects to the team's shared PostgreSQL on the server (`72.61.114.184:5433`, database `dtrps`). The connection is in `src/main/resources/application.yaml`, so no setup is needed.
+By default the app connects to the team's shared PostgreSQL on the server (`72.62.65.80:5433`, database `dtrps`). The connection is in `src/main/resources/application.yaml`, so no setup is needed.
 
 This is the same database the live API at `https://travel-api.fptuany.online` uses:
 

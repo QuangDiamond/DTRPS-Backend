@@ -63,18 +63,18 @@ public class PlanProfileResolver {
             ? List.of()
             : plan.getCategoryCodes();
 
-        // Loại mã không hợp lệ và nhóm lưu trú.
+        // Giữ nguyên mọi loại hình người dùng chọn (kể cả lưu trú),
+        // chỉ bỏ mã không hợp lệ.
         List<String> eligibleCodes = codes.stream()
             .filter(Objects::nonNull)
             .filter(categoryMap::containsKey)
-            .filter(code -> {
-                PlaceCategory c = categoryMap.get(code);
-                return c.getParent() == null
-                    || !"lodging".equalsIgnoreCase(
-                        c.getParent().getCode()
-                    );
-            })
             .distinct()
+            .toList();
+
+        // Các mã lưu trú người dùng chủ động chọn: chỉ khi có mã này
+        // thì địa điểm lưu trú tương ứng mới được đưa vào gợi ý.
+        List<String> lodgingCodes = eligibleCodes.stream()
+            .filter(code -> isLodging(categoryMap.get(code)))
             .toList();
 
         List<String> names = eligibleCodes.stream()
@@ -96,8 +96,20 @@ public class PlanProfileResolver {
             plan.getTravelPace(),
             eligibleCodes,
             names,
-            parseCompanion(plan.getDescription())
+            parseCompanion(plan.getDescription()),
+            lodgingCodes
         );
+    }
+
+    private boolean isLodging(PlaceCategory category) {
+        if ("lodging".equalsIgnoreCase(category.getCode())) {
+            return true;
+        }
+
+        return category.getParent() != null
+            && "lodging".equalsIgnoreCase(
+                category.getParent().getCode()
+            );
     }
 
     private String parseCompanion(String description) {
@@ -125,7 +137,8 @@ public class PlanProfileResolver {
         String travelPace,
         List<String> categoryCodes,
         List<String> categoryNames,
-        String companionType
+        String companionType,
+        List<String> lodgingCodes
     ) {
         public BigDecimal budgetPerPerson() {
             if (totalBudget == null || groupSize <= 0) {

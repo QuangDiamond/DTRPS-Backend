@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -47,21 +48,46 @@ public class PlaceEmbeddingService {
         this.transactionTemplate = transactionTemplate;
     }
 
+    /** Nhúng lại toàn bộ địa điểm ACTIVE (bỏ qua điểm có nội dung không đổi). */
     public RebuildResult rebuild(int limit) {
 
-    if (limit < 1 || limit > 500) {
-        throw new IllegalArgumentException(
-            "Limit phải nằm trong khoảng 1 đến 500"
+        if (limit < 1 || limit > 500) {
+            throw new IllegalArgumentException(
+                "Limit phải nằm trong khoảng 1 đến 500"
+            );
+        }
+
+        return embed(placeRepository.findActiveWithCategories(), limit);
+    }
+
+    /**
+     * Nhúng riêng các địa điểm vừa được thêm/sửa
+     * (gọi tự động bởi {@link PlaceEmbeddingAutoSync}).
+     */
+    public RebuildResult syncPlaces(Collection<Long> placeIds) {
+
+        if (placeIds == null || placeIds.isEmpty()) {
+            return new RebuildResult(0, 0, 0);
+        }
+
+        return embed(
+            placeRepository.findActiveWithCategoriesByIds(placeIds),
+            Integer.MAX_VALUE
         );
     }
 
+    private RebuildResult embed(List<Place> places, int limit) {
+
+        if (places.isEmpty()) {
+            return new RebuildResult(0, 0, 0);
+        }
+
         String model = properties.resolvedModel();
 
-        List<Place> places =
-            placeRepository.findActiveWithCategories();
-
         Map<Long, PlaceEmbedding> existing =
-            embeddingRepository.findAll()
+            embeddingRepository.findByPlacePlaceIdIn(
+                    places.stream().map(Place::getPlaceId).toList()
+                )
                 .stream()
                 .collect(Collectors.toMap(
                     e -> e.getPlace().getPlaceId(),
@@ -102,8 +128,8 @@ public class PlaceEmbeddingService {
                 hash
             ));
             if (pending.size() >= limit) {
-    break;
-}
+                break;
+            }
         }
 
         int embedded = 0;

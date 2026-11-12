@@ -22,7 +22,7 @@ public class AdminEmbeddingController {
 
   @PostMapping("/rebuild")
 public RebuildResult rebuild(
-        @RequestParam(defaultValue = "1") int limit) {
+        @RequestParam(defaultValue = "500") int limit) {
 
     return embeddingService.rebuild(limit);
 }

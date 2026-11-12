@@ -6,6 +6,7 @@ import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -58,8 +59,7 @@ public class RecommendationCandidateRepository {
             price.price_type,
             price.amount AS reference_price,
 
-            %s AS cosine_similarity,
-            e.embedding::text AS embedding_text
+            %s AS cosine_similarity
 
         FROM places p
 
@@ -116,33 +116,50 @@ LEFT JOIN place_categories main_parent
          
 AND p.category_id IS NOT NULL
 
-AND COALESCE(
-    main_parent.code,
-    main_cat.code
-) <> 'lodging'
-
+AND (
+    COALESCE(main_parent.code, main_cat.code) <> 'lodging'
+    %s
+)
 
         ORDER BY %s
+        """;
+
+    // Điểm lưu trú chỉ được gợi ý khi khớp loại hình lưu trú
+    // mà người dùng đã chọn (hoặc chọn cả nhóm "lodging").
+    private static final String LODGING_ALLOWED = """
+        OR main_cat.code IN (:lodgingCodes)
+        OR main_parent.code IN (:lodgingCodes)
+        OR EXISTS (
+            SELECT 1
+            FROM place_category_links lodging_link
+            JOIN place_categories lodging_cat
+              ON lodging_cat.category_id = lodging_link.category_id
+            WHERE lodging_link.place_id = p.place_id
+              AND lodging_cat.code IN (:lodgingCodes)
+        )
         """;
 
     public List<Candidate> findCandidates(
             Long planId,
             String destination,
+            Collection<String> lodgingCodes,
             float[] queryVector) {
 
-        return query(planId, destination, queryVector);
+        return query(planId, destination, lodgingCodes, queryVector);
     }
 
     public List<Candidate> findRuleOnlyCandidates(
             Long planId,
-            String destination) {
+            String destination,
+            Collection<String> lodgingCodes) {
 
-        return query(planId, destination, null);
+        return query(planId, destination, lodgingCodes, null);
     }
 
     private List<Candidate> query(
             Long planId,
             String destination,
+            Collection<String> lodgingCodes,
             float[] queryVector) {
 
         if (planId == null
@@ -167,9 +184,13 @@ AND COALESCE(
             ? "e.embedding <=> CAST(:queryVector AS vector), p.place_id"
             : "p.place_id";
 
+        boolean hasLodging =
+            lodgingCodes != null && !lodgingCodes.isEmpty();
+
         String sql = BASE_SQL.formatted(
             similarityExpression,
             embeddingJoin,
+            hasLodging ? LODGING_ALLOWED : "",
             orderExpression
         );
 
@@ -180,6 +201,10 @@ AND COALESCE(
                     "destination",
                     destination.trim().toLowerCase(Locale.ROOT)
                 );
+
+        if (hasLodging) {
+            params.addValue("lodgingCodes", List.copyOf(lodgingCodes));
+        }
 
         if (hasVector) {
             params.addValue(
@@ -215,8 +240,7 @@ AND COALESCE(
             rs.getBigDecimal("reference_price"),
             (Double) rs.getObject("latitude"),
             (Double) rs.getObject("longitude"),
-            (Double) rs.getObject("cosine_similarity"),
-            parseVector(rs.getString("embedding_text"))
+            (Double) rs.getObject("cosine_similarity")
         );
     }
 
@@ -247,33 +271,6 @@ AND COALESCE(
         return result.append("]").toString();
     }
 
-    private float[] parseVector(String text) {
-
-        if (text == null || text.isBlank()) {
-            return null;
-        }
-
-        String content = text.substring(
-            1, text.length() - 1
-        );
-
-        String[] parts = content.split(",");
-
-        if (parts.length != DIMENSIONS) {
-            throw new IllegalStateException(
-                "Vector Place không đủ 1536 chiều"
-            );
-        }
-
-        float[] result = new float[DIMENSIONS];
-
-        for (int i = 0; i < DIMENSIONS; i++) {
-            result[i] = Float.parseFloat(parts[i]);
-        }
-
-        return result;
-    }
-
     public record Candidate(
         Long placeId,
         String name,
@@ -284,7 +281,6 @@ AND COALESCE(
         BigDecimal referencePrice,
         Double latitude,
         Double longitude,
-        Double cosineSimilarity,
-        float[] placeVector
+        Double cosineSimilarity
     ) {}
 }
