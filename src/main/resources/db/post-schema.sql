@@ -13,6 +13,12 @@ ON place_images(place_id)
 WHERE is_primary = TRUE
 @@
 
+-- Only one review per traveller per place
+-- (ddl-auto=update never adds constraints to tables that already exist without it)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_place_review_user_place
+ON place_reviews(user_id, place_id)
+@@
+
 -- A business may own several places: drop the old one-listing-per-business unique constraint
 -- (ddl-auto=update never removes constraints, so databases created earlier still have it)
 DO $$
