@@ -60,6 +60,7 @@ public class AdminPlaceController {
       @RequestParam(required = false) String province,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String source,
+      @RequestParam(required = false) String sort,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size) {
     return placeService.list(
@@ -69,8 +70,23 @@ public class AdminPlaceController {
         province,
         status,
         source,
-        PageRequest.of(
-            page, size, Sort.by(Sort.Direction.DESC, "updatedAt").and(Sort.by("placeId"))));
+        PageRequest.of(page, size, order(sort)));
+  }
+
+  /**
+   * Thứ tự danh sách. Mặc định theo mã địa điểm: sửa ảnh / giá / giờ không làm địa điểm nhảy trang.
+   * Luôn kèm placeId để các trang không trùng / sót dòng khi hai địa điểm có cùng giá trị.
+   */
+  private static Sort order(String sort) {
+    Sort byId = Sort.by("placeId");
+    if (sort == null) return byId;
+    return switch (sort) {
+      case "updated" -> Sort.by(Sort.Direction.DESC, "updatedAt").and(byId);
+      case "created" ->
+          Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "placeId"));
+      case "name" -> Sort.by("name").and(byId);
+      default -> byId;
+    };
   }
 
   @GetMapping("/stats")
