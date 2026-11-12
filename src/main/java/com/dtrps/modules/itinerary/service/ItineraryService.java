@@ -1,3 +1,4 @@
+
 package com.dtrps.modules.itinerary.service;
 
 import com.dtrps.exception.ApiException;
@@ -12,6 +13,7 @@ import com.dtrps.modules.itinerary.repository.ItineraryRepository;
 import com.dtrps.modules.itinerary.repository.PlanPlaceRepository;
 import com.dtrps.modules.itinerary.repository.ItineraryItemRepository;
 import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
+import com.dtrps.modules.itinerary.repository.TripProgressRepository;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -31,6 +33,7 @@ public class ItineraryService {
     private final PlanPlaceRepository planPlaces;
     private final ItineraryItemRepository itemRepository;
     private final ItinerarySchedulingService scheduler;
+    private final TripProgressRepository tripProgressRepository;
 
     public ItineraryService(
             TravelPlanRepository planRepository,
@@ -38,7 +41,8 @@ public class ItineraryService {
             ItineraryDayRepository dayRepository,
             PlanPlaceRepository planPlaces,
             ItineraryItemRepository itemRepository,
-            ItinerarySchedulingService scheduler
+            ItinerarySchedulingService scheduler,
+            TripProgressRepository tripProgressRepository
     ) {
         this.planRepository = planRepository;
         this.itineraryRepository = itineraryRepository;
@@ -46,6 +50,7 @@ public class ItineraryService {
         this.planPlaces = planPlaces;
         this.itemRepository = itemRepository;
         this.scheduler = scheduler;
+        this.tripProgressRepository = tripProgressRepository;
     }
 
     /**
@@ -73,6 +78,10 @@ public class ItineraryService {
 
         // Không được tạo lịch trình cho kế hoạch người khác
         checkOwner(plan, userId);
+
+        // Không tạo phiên bản mới khi chuyến đi đã bắt đầu.
+        // Kiểm tra khi đã khóa TravelPlan để tránh tranh chấp với startDay().
+        ensureTripNotStarted(plan);
 
         LocalDate startDate = plan.getStartDate();
         LocalDate endDate = plan.getEndDate();
@@ -102,9 +111,13 @@ public class ItineraryService {
         }
 
         // Chỉ những địa điểm Traveller đã chọn mới được đưa vào lịch trình.
-        List<PlanPlace> chosen = planPlaces.findByPlanPlanIdOrderByPriorityDescPlanPlaceIdAsc(planId);
-        // Lên lịch trong bộ nhớ trước: lỗi không làm thay đổi ACTIVE hiện tại.
-        List<List<ItinerarySchedulingService.Visit>> schedule = scheduler.arrange(plan, chosen);
+        List<PlanPlace> chosen =
+                planPlaces.findByPlanPlanIdOrderByPriorityDescPlanPlaceIdAsc(planId);
+
+        // Lên lịch trong bộ nhớ trước:
+        // lỗi không làm thay đổi ACTIVE hiện tại.
+        List<List<ItinerarySchedulingService.Visit>> schedule =
+                scheduler.arrange(plan, chosen);
 
         // Bước 3: Xác định version_number tiếp theo
         int nextVersion = itineraryRepository
@@ -178,10 +191,13 @@ public class ItineraryService {
 
         // Lưu các hoạt động được hệ thống tự động sắp xếp.
         List<ItineraryItem> items = new ArrayList<>();
+
         for (int d = 0; d < days.size(); d++) {
             int position = 1;
+
             for (ItinerarySchedulingService.Visit visit : schedule.get(d)) {
                 ItineraryItem item = new ItineraryItem();
+
                 item.setDay(days.get(d));
                 item.setPlace(visit.place());
                 item.setItemOrder(position++);
@@ -190,10 +206,13 @@ public class ItineraryService {
                 item.setTravelTimeMinutes(visit.travelMinutes());
                 item.setEstimatedCost(visit.estimatedCost());
                 item.setStatus("PLANNED");
+
                 items.add(item);
             }
         }
+
         itemRepository.saveAllAndFlush(items);
+
         return toResponse(itinerary, days);
     }
 
@@ -247,6 +266,41 @@ public class ItineraryService {
             throw new ApiException(
                     HttpStatus.NOT_FOUND,
                     "Không tìm thấy kế hoạch du lịch"
+            );
+        }
+    }
+
+    /**
+     * Không cho tạo lại lịch trình khi chuyến đi đang diễn ra
+     * hoặc đã kết thúc.
+     *
+     * Kiểm tra tiến độ của mọi phiên bản, kể cả ARCHIVED,
+     * để tránh mất liên kết với tiến độ chuyến đi trước đó.
+     */
+    private void ensureTripNotStarted(TravelPlan plan) {
+
+        // Travel Plan chỉ được tạo lịch trình khi DRAFT hoặc PLANNED.
+        if (!TravelPlanStatus.isEditable(plan.getStatus())) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "Không thể tạo lại lịch trình khi chuyến đi đang diễn ra hoặc đã kết thúc"
+            );
+        }
+
+        // Kiểm tra tiến độ thực tế của mọi phiên bản lịch trình.
+        boolean alreadyStarted = tripProgressRepository
+                .findByItineraryPlanPlanIdOrderByProgressIdAsc(plan.getPlanId())
+                .stream()
+                .anyMatch(progress ->
+                        progress.getStartedAt() != null
+                                || progress.getCompletedAt() != null
+                                || !"NOT_STARTED".equals(progress.getStatus())
+                );
+
+        if (alreadyStarted) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "Chuyến đi đã bắt đầu, không thể tạo lại lịch trình"
             );
         }
     }
