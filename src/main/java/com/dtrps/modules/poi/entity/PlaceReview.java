@@ -11,20 +11,31 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Check;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
+/**
+ * One review per (user, place) — enforced here for new databases, and by a unique index added in
+ * {@code post-schema.sql} for databases Hibernate's {@code ddl-auto=update} already created
+ * without it.
+ */
 @Entity
 @Table(
     name = "place_reviews",
     indexes = {
       @Index(name = "idx_place_reviews_place", columnList = "place_id"),
       @Index(name = "idx_place_reviews_user", columnList = "user_id")
-    })
+    },
+    uniqueConstraints =
+        @UniqueConstraint(
+            name = "uq_place_review_user_place",
+            columnNames = {"user_id", "place_id"}))
 @Check(name = "chk_place_rating", constraints = "(((rating >= 1) AND (rating <= 5)))")
 @Check(name = "chk_place_review_status", constraints = "status IN ('VISIBLE', 'HIDDEN')")
 @Getter
@@ -57,4 +68,9 @@ public class PlaceReview {
   @ColumnDefault("now()")
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
+
+  @UpdateTimestamp
+  @ColumnDefault("now()")
+  @Column(name = "updated_at", nullable = false)
+  private Instant updatedAt;
 }

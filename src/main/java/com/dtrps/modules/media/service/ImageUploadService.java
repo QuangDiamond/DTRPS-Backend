@@ -15,6 +15,7 @@ public class ImageUploadService {
   static final String EMPTY = "Vui lòng chọn ảnh";
   static final String TOO_LARGE = "Ảnh tối đa 5MB";
   static final String UNSUPPORTED = "Chỉ nhận ảnh jpg, png hoặc webp";
+  private static final String REVIEW_FOLDER = "dtrps/reviews";
 
   private static final Map<String, String> EXTENSIONS =
       Map.of("image/jpeg", "jpg", "image/png", "png", "image/webp", "webp");
@@ -35,6 +36,11 @@ public class ImageUploadService {
   /** A profile picture, kept in the avatar folder. */
   public String uploadAvatar(MultipartFile file) {
     return upload(file, properties.avatarFolderOrDefault());
+  }
+
+  /** A photo attached to a place review, kept apart from place/avatar photos. */
+  public String uploadReviewPhoto(MultipartFile file) {
+    return upload(file, REVIEW_FOLDER);
   }
 
   private String upload(MultipartFile file, String folder) {
