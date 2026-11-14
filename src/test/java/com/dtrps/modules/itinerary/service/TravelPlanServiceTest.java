@@ -16,6 +16,8 @@ import com.dtrps.modules.itinerary.entity.TravelPlan;
 import com.dtrps.modules.itinerary.repository.ItineraryRepository;
 import com.dtrps.modules.itinerary.repository.PlanInterestRepository;
 import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
+import com.dtrps.modules.itinerary.repository.TripDayProgressRepository;
+import com.dtrps.modules.itinerary.repository.TripProgressRepository;
 import com.dtrps.modules.poi.entity.PlaceCategory;
 import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
 import com.dtrps.modules.user.entity.User;
@@ -47,6 +49,8 @@ class TravelPlanServiceTest {
   @Mock private TravelPlanRepository planRepository;
   @Mock private PlanInterestRepository planInterestRepository;
   @Mock private ItineraryRepository itineraryRepository;
+  @Mock private TripDayProgressRepository tripDayProgressRepository;
+  @Mock private TripProgressRepository tripProgressRepository;
   @Mock private UserRepository userRepository;
   @Mock private PlaceCategoryRepository categoryRepository;
 
@@ -60,6 +64,8 @@ class TravelPlanServiceTest {
             planRepository,
             planInterestRepository,
             itineraryRepository,
+            tripDayProgressRepository,
+            tripProgressRepository,
             userRepository,
             categoryRepository);
     owner = new User();
@@ -82,8 +88,7 @@ class TravelPlanServiceTest {
   }
 
   private void givenOwnedPlan(TravelPlan plan) {
-    when(planRepository.findByPlanIdAndUserUserId(PLAN_ID, OWNER_ID))
-        .thenReturn(Optional.of(plan));
+    when(planRepository.lockById(PLAN_ID)).thenReturn(Optional.of(plan));
   }
 
   /** Loại hình con ACTIVE có nhóm cha ACTIVE: những mã được chọn làm sở thích của chuyến. */
@@ -192,8 +197,7 @@ class TravelPlanServiceTest {
           new TravelPlanDtos.CreateRequest(
               "A", "B", END, START, null, null, null, null, null, null);
 
-      Throwable thrown =
-          catchThrowable(() -> service.create(OWNER_ID, bad));
+      Throwable thrown = catchThrowable(() -> service.create(OWNER_ID, bad));
 
       assertApiError(thrown, HttpStatus.BAD_REQUEST, TravelPlanService.INVALID_DATES);
     }
@@ -211,9 +215,7 @@ class TravelPlanServiceTest {
       when(planRepository.findByPlanIdAndUserUserId(PLAN_ID, OTHER_ID))
           .thenReturn(Optional.empty());
 
-      Throwable thrown =
-          catchThrowable(
-              () -> service.getById(OTHER_ID, PLAN_ID));
+      Throwable thrown = catchThrowable(() -> service.getById(OTHER_ID, PLAN_ID));
 
       assertApiError(thrown, HttpStatus.NOT_FOUND, TravelPlanService.PLAN_NOT_FOUND);
     }
@@ -232,7 +234,7 @@ class TravelPlanServiceTest {
       assertThat(plans)
           .extracting(TravelPlanDtos.PlanResponse::planId)
           .containsExactly(PLAN_ID, 6L);
-      assertThat(plans.get(1).allowedNextStatuses()).containsExactly("IN_PROGRESS", "CANCELLED");
+      assertThat(plans.get(1).allowedNextStatuses()).containsExactly("CANCELLED");
     }
   }
 
@@ -309,8 +311,7 @@ class TravelPlanServiceTest {
     @Test
     @DisplayName("Người khác không sửa được")
     void otherUserCannotUpdate() {
-      when(planRepository.findByPlanIdAndUserUserId(PLAN_ID, OTHER_ID))
-          .thenReturn(Optional.empty());
+      givenOwnedPlan(plan("PLANNED"));
 
       Throwable thrown =
           catchThrowable(
@@ -333,8 +334,9 @@ class TravelPlanServiceTest {
 
       service.delete(OWNER_ID, PLAN_ID);
 
-      InOrder order = inOrder(planRepository, planInterestRepository);
+      InOrder order = inOrder(planRepository, planInterestRepository, tripDayProgressRepository);
       order.verify(planRepository).deleteActivityProgressByPlanId(PLAN_ID);
+      order.verify(tripDayProgressRepository).deleteByPlanId(PLAN_ID);
       order.verify(planRepository).deleteTripProgressByPlanId(PLAN_ID);
       order.verify(planRepository).deleteItinerarySharesByPlanId(PLAN_ID);
       order.verify(planRepository).deleteItineraryItemsByPlanId(PLAN_ID);
@@ -351,8 +353,7 @@ class TravelPlanServiceTest {
     void rejectsInProgress() {
       givenOwnedPlan(plan("IN_PROGRESS"));
 
-      Throwable thrown =
-          catchThrowable(() -> service.delete(OWNER_ID, PLAN_ID));
+      Throwable thrown = catchThrowable(() -> service.delete(OWNER_ID, PLAN_ID));
 
       assertApiError(thrown, HttpStatus.CONFLICT, TravelPlanService.NOT_DELETABLE);
       verify(planRepository, never()).deletePlanById(anyLong());
@@ -361,11 +362,9 @@ class TravelPlanServiceTest {
     @Test
     @DisplayName("Người khác không xóa được")
     void otherUserCannotDelete() {
-      when(planRepository.findByPlanIdAndUserUserId(PLAN_ID, OTHER_ID))
-          .thenReturn(Optional.empty());
+      givenOwnedPlan(plan("PLANNED"));
 
-      Throwable thrown =
-          catchThrowable(() -> service.delete(OTHER_ID, PLAN_ID));
+      Throwable thrown = catchThrowable(() -> service.delete(OTHER_ID, PLAN_ID));
 
       assertApiError(thrown, HttpStatus.NOT_FOUND, TravelPlanService.PLAN_NOT_FOUND);
       verify(planRepository, never()).deletePlanById(anyLong());
@@ -389,17 +388,18 @@ class TravelPlanServiceTest {
 
       assertThat(draft.getStatus()).isEqualTo("PLANNED");
       assertThat(response.status()).isEqualTo("PLANNED");
-      assertThat(response.allowedNextStatuses()).containsExactly("IN_PROGRESS", "CANCELLED");
+      assertThat(response.allowedNextStatuses()).containsExactly("CANCELLED");
     }
 
     @Test
-    @DisplayName("Hủy được khi đang diễn ra")
-    void cancelsInProgress() {
+    @DisplayName("Không hủy qua API đổi trạng thái khi đang diễn ra")
+    void rejectsCancelWhileInProgress() {
       givenOwnedPlan(plan("IN_PROGRESS"));
-      when(planRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
-      assertThat(service.changeStatus(OWNER_ID, PLAN_ID, "CANCELLED").allowedNextStatuses())
-          .isEmpty();
+      Throwable thrown = catchThrowable(() -> service.changeStatus(OWNER_ID, PLAN_ID, "CANCELLED"));
+
+      assertApiError(thrown, HttpStatus.CONFLICT, "Chuyến đi đang diễn ra, không thể hủy");
+      verify(planRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -407,9 +407,7 @@ class TravelPlanServiceTest {
     void rejectsBackwards() {
       givenOwnedPlan(plan("IN_PROGRESS"));
 
-      Throwable thrown =
-          catchThrowable(
-              () -> service.changeStatus(OWNER_ID, PLAN_ID, "PLANNED"));
+      Throwable thrown = catchThrowable(() -> service.changeStatus(OWNER_ID, PLAN_ID, "PLANNED"));
 
       assertApiError(
           thrown,
@@ -423,9 +421,7 @@ class TravelPlanServiceTest {
     void rejectsSkipping() {
       givenOwnedPlan(plan("DRAFT"));
 
-      Throwable thrown =
-          catchThrowable(
-              () -> service.changeStatus(OWNER_ID, PLAN_ID, "COMPLETED"));
+      Throwable thrown = catchThrowable(() -> service.changeStatus(OWNER_ID, PLAN_ID, "COMPLETED"));
 
       assertApiError(thrown, HttpStatus.CONFLICT, "Chỉ được chuyển sang: Đã lên kế hoạch, Đã hủy");
     }
@@ -435,9 +431,7 @@ class TravelPlanServiceTest {
     void rejectsCancelAfterCompleted() {
       givenOwnedPlan(plan("COMPLETED"));
 
-      Throwable thrown =
-          catchThrowable(
-              () -> service.changeStatus(OWNER_ID, PLAN_ID, "CANCELLED"));
+      Throwable thrown = catchThrowable(() -> service.changeStatus(OWNER_ID, PLAN_ID, "CANCELLED"));
 
       assertApiError(thrown, HttpStatus.CONFLICT, "không thể đổi trạng thái nữa");
     }
@@ -447,9 +441,7 @@ class TravelPlanServiceTest {
     void rejectsSameStatus() {
       givenOwnedPlan(plan("PLANNED"));
 
-      Throwable thrown =
-          catchThrowable(
-              () -> service.changeStatus(OWNER_ID, PLAN_ID, "PLANNED"));
+      Throwable thrown = catchThrowable(() -> service.changeStatus(OWNER_ID, PLAN_ID, "PLANNED"));
 
       assertApiError(thrown, HttpStatus.CONFLICT, "Kế hoạch đã ở trạng thái Đã lên kế hoạch");
     }
@@ -459,9 +451,7 @@ class TravelPlanServiceTest {
     void rejectsUnknownStatus() {
       givenOwnedPlan(plan("DRAFT"));
 
-      Throwable thrown =
-          catchThrowable(
-              () -> service.changeStatus(OWNER_ID, PLAN_ID, "ARCHIVED"));
+      Throwable thrown = catchThrowable(() -> service.changeStatus(OWNER_ID, PLAN_ID, "ARCHIVED"));
 
       assertApiError(thrown, HttpStatus.BAD_REQUEST, "Trạng thái không hợp lệ");
     }
@@ -469,12 +459,9 @@ class TravelPlanServiceTest {
     @Test
     @DisplayName("Người khác không đổi được")
     void otherUserCannotChange() {
-      when(planRepository.findByPlanIdAndUserUserId(PLAN_ID, OTHER_ID))
-          .thenReturn(Optional.empty());
+      givenOwnedPlan(plan("PLANNED"));
 
-      Throwable thrown =
-          catchThrowable(
-              () -> service.changeStatus(OTHER_ID, PLAN_ID, "PLANNED"));
+      Throwable thrown = catchThrowable(() -> service.changeStatus(OTHER_ID, PLAN_ID, "PLANNED"));
 
       assertApiError(thrown, HttpStatus.NOT_FOUND, TravelPlanService.PLAN_NOT_FOUND);
     }
