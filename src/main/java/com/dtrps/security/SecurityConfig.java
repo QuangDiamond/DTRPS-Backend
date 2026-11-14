@@ -105,7 +105,8 @@ public class SecurityConfig {
                                                 HttpMethod.GET,
                                                 "/api/reference/**",
                                                 "/api/places",
-                                                "/api/places/{id}")
+                                                "/api/places/{id}",
+                                                "/api/places/{id}/reviews")
                                         .permitAll()
 
                                         .requestMatchers("/error")
