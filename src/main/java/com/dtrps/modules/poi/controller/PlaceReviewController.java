@@ -14,11 +14,9 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -27,7 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Đánh giá một địa điểm: công khai xem danh sách, khách đăng nhập chấm 1-5 sao + nhận xét + tối đa
- * 5 ảnh, sửa/xóa đánh giá của chính mình.
+ * 5 ảnh. Gửi một lần, không sửa/xóa lại được.
  */
 @RestController
 @Validated
@@ -49,11 +47,11 @@ public class PlaceReviewController {
     return reviewService.list(placeId, PageRequest.of(page, size));
   }
 
-  /** 404 nếu khách chưa đánh giá địa điểm này. */
+  /** Đánh giá đã có của khách (nếu có) + có được viết đánh giá mới cho địa điểm này không. */
   @GetMapping("/me")
-  public PlaceReviewDtos.ReviewResponse mine(
+  public PlaceReviewDtos.ReviewStatusResponse status(
       @AuthenticationPrincipal Jwt jwt, @PathVariable Long placeId) {
-    return reviewService.mine(CurrentUser.id(jwt), placeId);
+    return reviewService.status(CurrentUser.id(jwt), placeId);
   }
 
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -66,23 +64,5 @@ public class PlaceReviewController {
           String comment,
       @RequestParam(value = "photos", required = false) List<MultipartFile> photos) {
     return reviewService.create(CurrentUser.id(jwt), placeId, rating, comment, photos);
-  }
-
-  @PutMapping(value = "/me", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public PlaceReviewDtos.ReviewResponse update(
-      @AuthenticationPrincipal Jwt jwt,
-      @PathVariable Long placeId,
-      @RequestParam @Min(1) @Max(5) short rating,
-      @RequestParam(required = false) @Size(max = 2000, message = "Nhận xét tối đa 2000 ký tự")
-          String comment,
-      @RequestParam(value = "keepImageUrls", required = false) List<String> keepImageUrls,
-      @RequestParam(value = "photos", required = false) List<MultipartFile> photos) {
-    return reviewService.update(CurrentUser.id(jwt), placeId, rating, comment, keepImageUrls, photos);
-  }
-
-  @DeleteMapping("/me")
-  @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable Long placeId) {
-    reviewService.delete(CurrentUser.id(jwt), placeId);
   }
 }
