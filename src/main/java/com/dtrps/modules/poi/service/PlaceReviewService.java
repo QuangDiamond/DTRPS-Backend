@@ -7,6 +7,7 @@ import com.dtrps.modules.poi.dto.PlaceReviewDtos;
 import com.dtrps.modules.poi.entity.Place;
 import com.dtrps.modules.poi.entity.PlaceReview;
 import com.dtrps.modules.poi.entity.PlaceReviewImage;
+import com.dtrps.modules.itinerary.repository.PlanPlaceRepository;
 import com.dtrps.modules.poi.repository.PlaceRepository;
 import com.dtrps.modules.poi.repository.PlaceReviewImageRepository;
 import com.dtrps.modules.poi.repository.PlaceReviewRepository;
@@ -15,6 +16,7 @@ import com.dtrps.modules.user.repository.UserRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -24,9 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Đánh giá địa điểm: khách chấm 1-5 sao, nhận xét và tối đa {@value #MAX_PHOTOS} ảnh; sửa/xóa được
- * đánh giá của chính mình. Một khách chỉ đánh giá một địa điểm đúng một lần (bảng {@code
- * place_reviews} có unique trên user_id + place_id).
+ * Đánh giá địa điểm: khách chấm 1-5 sao, nhận xét và tối đa {@value #MAX_PHOTOS} ảnh. Một khách chỉ
+ * đánh giá một địa điểm đúng một lần (bảng {@code place_reviews} có unique trên user_id +
+ * place_id) và không sửa/xóa lại được sau khi đã gửi.
  */
 @Service
 public class PlaceReviewService {
@@ -35,13 +37,15 @@ public class PlaceReviewService {
   static final int MAX_PHOTOS = 5;
 
   static final String PLACE_NOT_FOUND = "Không tìm thấy địa điểm";
-  static final String REVIEW_NOT_FOUND = "Chưa có đánh giá cho địa điểm này";
-  static final String ALREADY_REVIEWED = "Bạn đã đánh giá địa điểm này rồi, hãy sửa đánh giá cũ";
+  static final String ALREADY_REVIEWED = "Bạn đã đánh giá địa điểm này rồi";
   static final String TOO_MANY_PHOTOS = "Tối đa " + MAX_PHOTOS + " ảnh cho mỗi đánh giá";
+  static final String NOT_ELIGIBLE =
+      "Bạn chỉ có thể đánh giá địa điểm đã từng chọn trong một chuyến đi của mình";
 
   private final PlaceReviewRepository reviewRepository;
   private final PlaceReviewImageRepository imageRepository;
   private final PlaceRepository placeRepository;
+  private final PlanPlaceRepository planPlaceRepository;
   private final UserRepository userRepository;
   private final ImageUploadService imageUploadService;
 
@@ -49,11 +53,13 @@ public class PlaceReviewService {
       PlaceReviewRepository reviewRepository,
       PlaceReviewImageRepository imageRepository,
       PlaceRepository placeRepository,
+      PlanPlaceRepository planPlaceRepository,
       UserRepository userRepository,
       ImageUploadService imageUploadService) {
     this.reviewRepository = reviewRepository;
     this.imageRepository = imageRepository;
     this.placeRepository = placeRepository;
+    this.planPlaceRepository = planPlaceRepository;
     this.userRepository = userRepository;
     this.imageUploadService = imageUploadService;
   }
@@ -68,17 +74,30 @@ public class PlaceReviewService {
     return new PageResponse<>(items, page.getTotalElements(), page.getNumber(), page.getSize());
   }
 
-  /** 404 nếu chưa đánh giá — để client hiểu là "chưa đánh giá", không phải lỗi. */
+  /**
+   * Đánh giá đã có của khách cho địa điểm này (nếu có), kèm {@code canReview}: true nếu khách chưa
+   * đánh giá và đã từng chọn địa điểm này trong một kế hoạch chuyến đi (được viết mới). Đã đánh giá
+   * rồi thì không sửa/xóa lại được nữa.
+   */
   @Transactional(readOnly = true)
-  public PlaceReviewDtos.ReviewResponse mine(Long userId, Long placeId) {
-    PlaceReview review = findOwnedReview(userId, placeId);
-    return toResponse(review, imageUrlsOf(review.getReviewId()));
+  public PlaceReviewDtos.ReviewStatusResponse status(Long userId, Long placeId) {
+    requirePlace(placeId);
+    Optional<PlaceReview> existing = reviewRepository.findByPlacePlaceIdAndUserUserId(placeId, userId);
+    PlaceReviewDtos.ReviewResponse response =
+        existing.map(review -> toResponse(review, imageUrlsOf(review.getReviewId()))).orElse(null);
+    boolean canReview =
+        existing.isEmpty()
+            && planPlaceRepository.existsByPlanUserUserIdAndPlacePlaceId(userId, placeId);
+    return new PlaceReviewDtos.ReviewStatusResponse(canReview, response);
   }
 
   @Transactional
   public PlaceReviewDtos.ReviewResponse create(
       Long userId, Long placeId, Short rating, String comment, List<MultipartFile> photos) {
     Place place = requirePlace(placeId);
+    if (!planPlaceRepository.existsByPlanUserUserIdAndPlacePlaceId(userId, placeId)) {
+      throw new ApiException(HttpStatus.FORBIDDEN, NOT_ELIGIBLE);
+    }
     if (reviewRepository.existsByUserUserIdAndPlacePlaceId(userId, placeId)) {
       throw new ApiException(HttpStatus.CONFLICT, ALREADY_REVIEWED);
     }
@@ -99,59 +118,7 @@ public class PlaceReviewService {
     return toResponse(review, imageUrls);
   }
 
-  @Transactional
-  public PlaceReviewDtos.ReviewResponse update(
-      Long userId,
-      Long placeId,
-      Short rating,
-      String comment,
-      List<String> keepImageUrls,
-      List<MultipartFile> photos) {
-    PlaceReview review = findOwnedReview(userId, placeId);
-
-    List<MultipartFile> files = nonEmpty(photos);
-    List<String> keep = keepImageUrls == null ? List.of() : keepImageUrls;
-    if (keep.size() + files.size() > MAX_PHOTOS) {
-      throw new ApiException(HttpStatus.BAD_REQUEST, TOO_MANY_PHOTOS);
-    }
-
-    review.setRating(rating);
-    review.setComment(blankToNull(comment));
-    reviewRepository.save(review);
-
-    List<PlaceReviewImage> current =
-        imageRepository.findByReviewReviewIdOrderByCreatedAtAsc(review.getReviewId());
-    List<PlaceReviewImage> toRemove =
-        current.stream().filter(image -> !keep.contains(image.getImageUrl())).toList();
-    imageRepository.deleteAll(toRemove);
-
-    List<String> keptUrls =
-        current.stream()
-            .filter(image -> keep.contains(image.getImageUrl()))
-            .map(PlaceReviewImage::getImageUrl)
-            .toList();
-    List<String> uploadedUrls = uploadImages(review, files);
-
-    List<String> allUrls = new ArrayList<>(keptUrls);
-    allUrls.addAll(uploadedUrls);
-    return toResponse(review, allUrls);
-  }
-
-  @Transactional
-  public void delete(Long userId, Long placeId) {
-    PlaceReview review = findOwnedReview(userId, placeId);
-    imageRepository.deleteAll(
-        imageRepository.findByReviewReviewIdOrderByCreatedAtAsc(review.getReviewId()));
-    reviewRepository.delete(review);
-  }
-
   // ===== Helpers =====
-
-  private PlaceReview findOwnedReview(Long userId, Long placeId) {
-    return reviewRepository
-        .findByPlacePlaceIdAndUserUserId(placeId, userId)
-        .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, REVIEW_NOT_FOUND));
-  }
 
   private Place requirePlace(Long placeId) {
     return placeRepository

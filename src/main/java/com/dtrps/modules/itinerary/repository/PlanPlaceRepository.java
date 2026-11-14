@@ -15,4 +15,7 @@ public interface PlanPlaceRepository extends JpaRepository<PlanPlace, Long> {
     boolean existsByPlanPlanIdAndPlacePlaceId(Long planId, Long placeId);
 
     long countByPlanPlanId(Long planId);
+
+    /** Đã từng chọn địa điểm này trong bất kỳ kế hoạch nào của khách (không phân biệt trạng thái). */
+    boolean existsByPlanUserUserIdAndPlacePlaceId(Long userId, Long placeId);
 }
