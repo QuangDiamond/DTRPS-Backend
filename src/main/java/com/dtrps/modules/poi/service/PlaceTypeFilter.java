@@ -4,6 +4,7 @@ import com.dtrps.modules.poi.entity.Place;
 import com.dtrps.modules.poi.entity.PlaceCategory;
 import jakarta.persistence.criteria.CommonAbstractCriteria;
 import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -16,9 +17,10 @@ final class PlaceTypeFilter {
   /**
    * The place has a type with this code ({@code level} null), or a type in the group with this code
    * ({@code level} "parent"). An EXISTS subquery, so a place with several types appears once.
+   * {@code target} is the place itself or a join to it (e.g. a review's place).
    */
   static Predicate hasType(
-      Root<Place> root,
+      Expression<Place> target,
       CommonAbstractCriteria query,
       CriteriaBuilder cb,
       String level,
@@ -27,7 +29,7 @@ final class PlaceTypeFilter {
     Root<Place> place = owned.from(Place.class);
     Join<Place, PlaceCategory> type = place.join("categories");
     var matched = level == null ? type.get("code") : type.get(level).get("code");
-    owned.select(place.get("placeId")).where(cb.equal(place, root), cb.equal(matched, code));
+    owned.select(place.get("placeId")).where(cb.equal(place, target), cb.equal(matched, code));
     return cb.exists(owned);
   }
 }

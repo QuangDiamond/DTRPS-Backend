@@ -48,6 +48,7 @@ public class PlaceReviewService {
   private final PlanPlaceRepository planPlaceRepository;
   private final UserRepository userRepository;
   private final ImageUploadService imageUploadService;
+  private final AdminReviewService adminReviews;
 
   public PlaceReviewService(
       PlaceReviewRepository reviewRepository,
@@ -55,13 +56,15 @@ public class PlaceReviewService {
       PlaceRepository placeRepository,
       PlanPlaceRepository planPlaceRepository,
       UserRepository userRepository,
-      ImageUploadService imageUploadService) {
+      ImageUploadService imageUploadService,
+      AdminReviewService adminReviews) {
     this.reviewRepository = reviewRepository;
     this.imageRepository = imageRepository;
     this.placeRepository = placeRepository;
     this.planPlaceRepository = planPlaceRepository;
     this.userRepository = userRepository;
     this.imageUploadService = imageUploadService;
+    this.adminReviews = adminReviews;
   }
 
   @Transactional(readOnly = true)
@@ -115,6 +118,8 @@ public class PlaceReviewService {
     review = reviewRepository.save(review);
 
     List<String> imageUrls = uploadImages(review, files);
+    // Danh sách quản lý đánh giá của admin tự cập nhật
+    adminReviews.placeReviewCreated(review);
     return toResponse(review, imageUrls);
   }
 

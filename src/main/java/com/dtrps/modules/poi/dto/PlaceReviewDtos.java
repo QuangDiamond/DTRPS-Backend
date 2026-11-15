@@ -1,5 +1,8 @@
 package com.dtrps.modules.poi.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 
@@ -26,4 +29,13 @@ public final class PlaceReviewDtos {
    * xem được đánh giá, không viết được.
    */
   public record ReviewStatusResponse(boolean canReview, ReviewResponse review) {}
+
+  /** Báo cáo đánh giá của người khác. {@code OTHER} cần ghi chú. */
+  public record ReportRequest(
+      @NotBlank(message = "Vui lòng chọn lý do báo cáo")
+          @Pattern(
+              regexp = "^(SPAM|OFFENSIVE|INAPPROPRIATE|MISLEADING|FAKE|PRIVACY|OTHER)$",
+              message = "Lý do báo cáo không hợp lệ")
+          String reason,
+      @Size(max = 500, message = "Ghi chú tối đa 500 ký tự") String note) {}
 }

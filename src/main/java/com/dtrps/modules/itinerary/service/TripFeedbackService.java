@@ -6,6 +6,7 @@ import com.dtrps.modules.itinerary.entity.TravelPlan;
 import com.dtrps.modules.itinerary.entity.TripFeedback;
 import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
 import com.dtrps.modules.itinerary.repository.TripFeedbackRepository;
+import com.dtrps.modules.poi.service.AdminReviewService;
 import com.dtrps.modules.user.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -25,14 +26,17 @@ public class TripFeedbackService {
   private final TripFeedbackRepository feedbackRepository;
   private final TravelPlanRepository planRepository;
   private final UserRepository userRepository;
+  private final AdminReviewService adminReviews;
 
   public TripFeedbackService(
       TripFeedbackRepository feedbackRepository,
       TravelPlanRepository planRepository,
-      UserRepository userRepository) {
+      UserRepository userRepository,
+      AdminReviewService adminReviews) {
     this.feedbackRepository = feedbackRepository;
     this.planRepository = planRepository;
     this.userRepository = userRepository;
+    this.adminReviews = adminReviews;
   }
 
   /** 404 nếu chưa đánh giá — để client hiểu là "chưa đánh giá", không phải lỗi. */
@@ -64,7 +68,10 @@ public class TripFeedbackService {
     feedback.setRating(request.rating());
     feedback.setComment(blankToNull(request.comment()));
 
-    return toResponse(feedbackRepository.save(feedback));
+    feedback = feedbackRepository.save(feedback);
+    // Danh sách quản lý đánh giá của admin tự cập nhật
+    adminReviews.tripFeedbackCreated(feedback);
+    return toResponse(feedback);
   }
 
   private TravelPlan findOwnedPlan(Long userId, Long planId) {
