@@ -4,7 +4,6 @@ import com.dtrps.modules.poi.entity.PlaceReview;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -27,9 +26,8 @@ public interface PlaceReviewRepository
   Page<PlaceReview> findByPlacePlaceIdAndStatusOrderByCreatedAtDesc(
       Long placeId, String status, Pageable pageable);
 
-  Optional<PlaceReview> findByPlacePlaceIdAndUserUserId(Long placeId, Long userId);
-
-  boolean existsByUserUserIdAndPlacePlaceId(Long userId, Long placeId);
+  /** Khách có thể đánh giá nhiều lần (mỗi lần đi lại một lần) — không còn unique theo user+place. */
+  long countByUserUserIdAndPlacePlaceId(Long userId, Long placeId);
 
   // ===== Admin =====
 

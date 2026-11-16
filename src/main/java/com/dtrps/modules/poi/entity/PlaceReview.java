@@ -11,7 +11,6 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
@@ -21,9 +20,9 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 /**
- * One review per (user, place) — enforced here for new databases, and by a unique index added in
- * {@code post-schema.sql} for databases Hibernate's {@code ddl-auto=update} already created
- * without it.
+ * Một khách có thể có nhiều đánh giá cho cùng một địa điểm — mỗi lần thực sự đi (kể cả đi lại)
+ * được đánh giá thêm một lần ({@link com.dtrps.modules.poi.service.PlaceReviewService}), nên
+ * KHÔNG có unique trên (user_id, place_id).
  */
 @Entity
 @Table(
@@ -31,11 +30,7 @@ import org.hibernate.annotations.UpdateTimestamp;
     indexes = {
       @Index(name = "idx_place_reviews_place", columnList = "place_id"),
       @Index(name = "idx_place_reviews_user", columnList = "user_id")
-    },
-    uniqueConstraints =
-        @UniqueConstraint(
-            name = "uq_place_review_user_place",
-            columnNames = {"user_id", "place_id"}))
+    })
 @Check(name = "chk_place_rating", constraints = "(((rating >= 1) AND (rating <= 5)))")
 @Check(name = "chk_place_review_status", constraints = "status IN ('VISIBLE', 'HIDDEN')")
 @Getter

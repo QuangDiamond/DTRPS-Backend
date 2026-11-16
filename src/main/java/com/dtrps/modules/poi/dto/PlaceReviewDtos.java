@@ -23,12 +23,11 @@ public final class PlaceReviewDtos {
       Instant updatedAt) {}
 
   /**
-   * {@code review} là đánh giá đã có của khách (null nếu chưa đánh giá). {@code canReview}: true
-   * nếu khách chưa đánh giá và đã từng chọn địa điểm này trong một kế hoạch chuyến đi (được viết
-   * mới). Đã đánh giá rồi, hoặc chưa từng chọn địa điểm này, thì {@code canReview = false} — chỉ
-   * xem được đánh giá, không viết được.
+   * {@code canReview}: true nếu khách đã đi địa điểm này (COMPLETED) nhiều lần hơn số đánh giá đã
+   * gửi — mỗi lần đi (kể cả đi lại) được đánh giá thêm một lần. Chưa từng đi, hoặc đã đánh giá đủ
+   * số lần đã đi, thì {@code canReview = false} — chỉ xem được đánh giá, không viết thêm được.
    */
-  public record ReviewStatusResponse(boolean canReview, ReviewResponse review) {}
+  public record ReviewStatusResponse(boolean canReview) {}
 
   /** Báo cáo đánh giá của người khác. {@code OTHER} cần ghi chú. */
   public record ReportRequest(
