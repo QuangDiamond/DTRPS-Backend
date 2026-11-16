@@ -53,7 +53,7 @@ public class PlaceReviewController {
     return reviewService.list(placeId, PageRequest.of(page, size));
   }
 
-  /** Đánh giá đã có của khách (nếu có) + có được viết đánh giá mới cho địa điểm này không. */
+  /** Có được viết đánh giá mới cho địa điểm này không (xem {@link PlaceReviewDtos.ReviewStatusResponse}). */
   @GetMapping("/me")
   public PlaceReviewDtos.ReviewStatusResponse status(
       @AuthenticationPrincipal Jwt jwt, @PathVariable Long placeId) {

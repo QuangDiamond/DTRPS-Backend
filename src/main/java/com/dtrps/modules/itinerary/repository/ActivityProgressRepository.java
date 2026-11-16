@@ -81,4 +81,17 @@ public interface ActivityProgressRepository
     Optional<ActivityProgress> lockByProgressIdAndItemId(
             @Param("progressId") Long progressId,
             @Param("itemId") Long itemId);
+
+    // Số lần khách đã THỰC SỰ đến địa điểm này (đánh dấu COMPLETED lúc đi chuyến),
+    // tính trên mọi kế hoạch/mọi lịch trình của khách — mỗi lần đi lại tính thêm 1 lần.
+    @Query("""
+      SELECT COUNT(ap)
+      FROM ActivityProgress ap
+      WHERE ap.item.place.placeId = :placeId
+        AND ap.progress.itinerary.plan.user.userId = :userId
+        AND ap.status = 'COMPLETED'
+      """)
+    long countCompletedVisits(
+            @Param("userId") Long userId,
+            @Param("placeId") Long placeId);
 }

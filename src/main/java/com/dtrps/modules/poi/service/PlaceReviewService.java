@@ -7,7 +7,7 @@ import com.dtrps.modules.poi.dto.PlaceReviewDtos;
 import com.dtrps.modules.poi.entity.Place;
 import com.dtrps.modules.poi.entity.PlaceReview;
 import com.dtrps.modules.poi.entity.PlaceReviewImage;
-import com.dtrps.modules.itinerary.repository.PlanPlaceRepository;
+import com.dtrps.modules.itinerary.repository.ActivityProgressRepository;
 import com.dtrps.modules.poi.repository.PlaceRepository;
 import com.dtrps.modules.poi.repository.PlaceReviewImageRepository;
 import com.dtrps.modules.poi.repository.PlaceReviewRepository;
@@ -16,7 +16,6 @@ import com.dtrps.modules.user.repository.UserRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,9 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Đánh giá địa điểm: khách chấm 1-5 sao, nhận xét và tối đa {@value #MAX_PHOTOS} ảnh. Một khách chỉ
- * đánh giá một địa điểm đúng một lần (bảng {@code place_reviews} có unique trên user_id +
- * place_id) và không sửa/xóa lại được sau khi đã gửi.
+ * Đánh giá địa điểm: khách chấm 1-5 sao, nhận xét và tối đa {@value #MAX_PHOTOS} ảnh. Khách chỉ
+ * đánh giá được những lần đã THỰC SỰ đi địa điểm đó (đánh dấu COMPLETED lúc đi chuyến) — mỗi lần đi
+ * (kể cả đi lại) được đánh giá thêm một lần; không sửa/xóa lại được sau khi đã gửi.
  */
 @Service
 public class PlaceReviewService {
@@ -37,15 +36,14 @@ public class PlaceReviewService {
   static final int MAX_PHOTOS = 5;
 
   static final String PLACE_NOT_FOUND = "Không tìm thấy địa điểm";
-  static final String ALREADY_REVIEWED = "Bạn đã đánh giá địa điểm này rồi";
   static final String TOO_MANY_PHOTOS = "Tối đa " + MAX_PHOTOS + " ảnh cho mỗi đánh giá";
   static final String NOT_ELIGIBLE =
-      "Bạn chỉ có thể đánh giá địa điểm đã từng chọn trong một chuyến đi của mình";
+      "Bạn cần đi địa điểm này (hoặc đi lại) thì mới đánh giá thêm được";
 
   private final PlaceReviewRepository reviewRepository;
   private final PlaceReviewImageRepository imageRepository;
   private final PlaceRepository placeRepository;
-  private final PlanPlaceRepository planPlaceRepository;
+  private final ActivityProgressRepository activityProgressRepository;
   private final UserRepository userRepository;
   private final ImageUploadService imageUploadService;
   private final AdminReviewService adminReviews;
@@ -54,14 +52,14 @@ public class PlaceReviewService {
       PlaceReviewRepository reviewRepository,
       PlaceReviewImageRepository imageRepository,
       PlaceRepository placeRepository,
-      PlanPlaceRepository planPlaceRepository,
+      ActivityProgressRepository activityProgressRepository,
       UserRepository userRepository,
       ImageUploadService imageUploadService,
       AdminReviewService adminReviews) {
     this.reviewRepository = reviewRepository;
     this.imageRepository = imageRepository;
     this.placeRepository = placeRepository;
-    this.planPlaceRepository = planPlaceRepository;
+    this.activityProgressRepository = activityProgressRepository;
     this.userRepository = userRepository;
     this.imageUploadService = imageUploadService;
     this.adminReviews = adminReviews;
@@ -78,31 +76,22 @@ public class PlaceReviewService {
   }
 
   /**
-   * Đánh giá đã có của khách cho địa điểm này (nếu có), kèm {@code canReview}: true nếu khách chưa
-   * đánh giá và đã từng chọn địa điểm này trong một kế hoạch chuyến đi (được viết mới). Đã đánh giá
-   * rồi thì không sửa/xóa lại được nữa.
+   * {@code canReview}: true nếu khách đã đi địa điểm này (COMPLETED) nhiều lần hơn số đánh giá đã
+   * gửi — mỗi lần đi (kể cả đi lại) cho phép đánh giá thêm một lần. Chưa từng đi, hoặc đã đánh giá
+   * đủ số lần đã đi, thì {@code canReview = false}.
    */
   @Transactional(readOnly = true)
   public PlaceReviewDtos.ReviewStatusResponse status(Long userId, Long placeId) {
     requirePlace(placeId);
-    Optional<PlaceReview> existing = reviewRepository.findByPlacePlaceIdAndUserUserId(placeId, userId);
-    PlaceReviewDtos.ReviewResponse response =
-        existing.map(review -> toResponse(review, imageUrlsOf(review.getReviewId()))).orElse(null);
-    boolean canReview =
-        existing.isEmpty()
-            && planPlaceRepository.existsByPlanUserUserIdAndPlacePlaceId(userId, placeId);
-    return new PlaceReviewDtos.ReviewStatusResponse(canReview, response);
+    return new PlaceReviewDtos.ReviewStatusResponse(canReview(userId, placeId));
   }
 
   @Transactional
   public PlaceReviewDtos.ReviewResponse create(
       Long userId, Long placeId, Short rating, String comment, List<MultipartFile> photos) {
     Place place = requirePlace(placeId);
-    if (!planPlaceRepository.existsByPlanUserUserIdAndPlacePlaceId(userId, placeId)) {
+    if (!canReview(userId, placeId)) {
       throw new ApiException(HttpStatus.FORBIDDEN, NOT_ELIGIBLE);
-    }
-    if (reviewRepository.existsByUserUserIdAndPlacePlaceId(userId, placeId)) {
-      throw new ApiException(HttpStatus.CONFLICT, ALREADY_REVIEWED);
     }
 
     List<MultipartFile> files = nonEmpty(photos);
@@ -125,6 +114,13 @@ public class PlaceReviewService {
 
   // ===== Helpers =====
 
+  /** Đã đi nhiều lần hơn số đánh giá đã gửi thì còn được đánh giá thêm. */
+  private boolean canReview(Long userId, Long placeId) {
+    long completedVisits = activityProgressRepository.countCompletedVisits(userId, placeId);
+    long reviewCount = reviewRepository.countByUserUserIdAndPlacePlaceId(userId, placeId);
+    return completedVisits > reviewCount;
+  }
+
   private Place requirePlace(Long placeId) {
     return placeRepository
         .findById(placeId)
@@ -143,12 +139,6 @@ public class PlaceReviewService {
       urls.add(url);
     }
     return urls;
-  }
-
-  private List<String> imageUrlsOf(Long reviewId) {
-    return imageRepository.findByReviewReviewIdOrderByCreatedAtAsc(reviewId).stream()
-        .map(PlaceReviewImage::getImageUrl)
-        .toList();
   }
 
   /** Ảnh của mọi đánh giá trong trang, trong một truy vấn (tránh N+1). */

@@ -13,10 +13,9 @@ ON place_images(place_id)
 WHERE is_primary = TRUE
 @@
 
--- Only one review per traveller per place
--- (ddl-auto=update never adds constraints to tables that already exist without it)
-CREATE UNIQUE INDEX IF NOT EXISTS uq_place_review_user_place
-ON place_reviews(user_id, place_id)
+-- Khách có thể đánh giá một địa điểm nhiều lần (mỗi lần thực sự đi lại được đánh giá thêm một
+-- lần) nên bỏ unique cũ (ddl-auto=update không tự xóa constraint của những DB tạo trước đó)
+ALTER TABLE place_reviews DROP CONSTRAINT IF EXISTS uq_place_review_user_place
 @@
 
 -- A business may own several places: drop the old one-listing-per-business unique constraint
