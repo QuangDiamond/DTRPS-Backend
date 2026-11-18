@@ -20,6 +20,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class PreferenceService {
   private static final String UNKNOWN_OPTION = "Lựa chọn không hợp lệ";
 
+  /** Cùng bộ mã với {@code TravelPlanService.EXPERIENCE_CODES} — câu hỏi cá nhân hóa dùng chung. */
+  private static final Set<String> EXPERIENCE_CODES =
+      Set.of(
+          "PURPOSE_RELAX", "PURPOSE_ADVENTURE", "PURPOSE_BOND", "PURPOSE_FUN", "PURPOSE_CULTURE",
+          "PURPOSE_ROMANCE",
+          "STYLE_QUIET", "STYLE_ACTIVE", "STYLE_FREE", "STYLE_PLANNED", "STYLE_COMFORT",
+          "STYLE_LOCAL",
+          "EXPERIENCE_NATURE", "EXPERIENCE_FOOD", "EXPERIENCE_PHOTO", "EXPERIENCE_OUTDOOR",
+          "EXPERIENCE_ART_CULTURE", "EXPERIENCE_WELLNESS",
+          "MEMORY_PHOTOS", "MEMORY_STORIES", "MEMORY_UNFORGETTABLE", "MEMORY_TOGETHER");
+
   private final PreferenceRepository preferenceRepository;
   private final UserRepository userRepository;
   private final PlaceCategoryRepository categoryRepository;
@@ -52,7 +63,18 @@ public class PreferenceService {
     preference.setInterests(resolve(request.interests(), categoryRepository::findByCodeIn));
     preference.setSpecialNeeds(
         resolve(request.specialNeeds(), specialNeedRepository::findByCodeIn));
+    preference.setExperiencePreferences(
+        validateExperiencePreferences(request.experiencePreferences()));
     return PreferenceResponse.from(preferenceRepository.save(preference));
+  }
+
+  private static List<String> validateExperiencePreferences(List<String> codes) {
+    for (String code : codes) {
+      if (!EXPERIENCE_CODES.contains(code)) {
+        throw new ApiException(HttpStatus.BAD_REQUEST, UNKNOWN_OPTION);
+      }
+    }
+    return List.copyOf(codes);
   }
 
   private Preference newPreference(Long userId) {

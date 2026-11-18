@@ -15,12 +15,16 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "preferences")
@@ -60,4 +64,14 @@ public class Preference {
       joinColumns = @JoinColumn(name = "preference_id"),
       inverseJoinColumns = @JoinColumn(name = "special_need_id"))
   private Set<SpecialNeed> specialNeeds = new HashSet<>();
+
+  /**
+   * Câu trả lời cá nhân hóa (mục đích/phong cách/trải nghiệm/kỷ niệm mong muốn) thiết lập một lần
+   * trong hồ sơ, dùng lại cho mỗi kế hoạch chuyến đi mới — cùng bộ mã với {@code
+   * TravelPlan.experiencePreferences}.
+   */
+  @JdbcTypeCode(SqlTypes.JSON)
+  @ColumnDefault("'[]'::jsonb")
+  @Column(name = "experience_preferences", columnDefinition = "jsonb", nullable = false)
+  private List<String> experiencePreferences = new ArrayList<>();
 }

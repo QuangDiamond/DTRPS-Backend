@@ -14,6 +14,7 @@ import com.dtrps.exception.ApiException;
 import com.dtrps.modules.itinerary.dto.TravelPlanDtos;
 import com.dtrps.modules.itinerary.entity.TravelPlan;
 import com.dtrps.modules.itinerary.repository.ItineraryRepository;
+import com.dtrps.modules.itinerary.repository.ItinerarySummaryRepository;
 import com.dtrps.modules.itinerary.repository.PlanInterestRepository;
 import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
 import com.dtrps.modules.itinerary.repository.TripDayProgressRepository;
@@ -49,6 +50,7 @@ class TravelPlanServiceTest {
   @Mock private TravelPlanRepository planRepository;
   @Mock private PlanInterestRepository planInterestRepository;
   @Mock private ItineraryRepository itineraryRepository;
+  @Mock private ItinerarySummaryRepository itinerarySummaryRepository;
   @Mock private TripDayProgressRepository tripDayProgressRepository;
   @Mock private TripProgressRepository tripProgressRepository;
   @Mock private UserRepository userRepository;
@@ -64,6 +66,7 @@ class TravelPlanServiceTest {
             planRepository,
             planInterestRepository,
             itineraryRepository,
+            itinerarySummaryRepository,
             tripDayProgressRepository,
             tripProgressRepository,
             userRepository,

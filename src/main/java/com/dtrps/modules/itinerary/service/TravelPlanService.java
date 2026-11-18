@@ -5,6 +5,7 @@ import com.dtrps.exception.ApiException;
 import com.dtrps.modules.itinerary.dto.TravelPlanDtos;
 import com.dtrps.modules.itinerary.entity.TravelPlan;
 import com.dtrps.modules.itinerary.repository.ItineraryRepository;
+import com.dtrps.modules.itinerary.repository.ItinerarySummaryRepository;
 import com.dtrps.modules.itinerary.repository.PlanInterestRepository;
 import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
 import com.dtrps.modules.itinerary.repository.TripDayProgressRepository;
@@ -14,6 +15,7 @@ import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
 import com.dtrps.modules.user.entity.User;
 import com.dtrps.modules.user.repository.UserRepository;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -63,6 +65,7 @@ public class TravelPlanService {
     private final TravelPlanRepository planRepository;
     private final PlanInterestRepository planInterestRepository;
     private final ItineraryRepository itineraryRepository;
+    private final ItinerarySummaryRepository itinerarySummaryRepository;
     private final TripDayProgressRepository tripDayProgressRepository;
     private final TripProgressRepository tripProgressRepository;
     private final UserRepository userRepository;
@@ -72,6 +75,7 @@ public class TravelPlanService {
             TravelPlanRepository planRepository,
             PlanInterestRepository planInterestRepository,
             ItineraryRepository itineraryRepository,
+            ItinerarySummaryRepository itinerarySummaryRepository,
             TripDayProgressRepository tripDayProgressRepository,
             TripProgressRepository tripProgressRepository,
             UserRepository userRepository,
@@ -80,6 +84,7 @@ public class TravelPlanService {
         this.planRepository = planRepository;
         this.planInterestRepository = planInterestRepository;
         this.itineraryRepository = itineraryRepository;
+        this.itinerarySummaryRepository = itinerarySummaryRepository;
         this.tripDayProgressRepository = tripDayProgressRepository;
         this.tripProgressRepository = tripProgressRepository;
         this.userRepository = userRepository;
@@ -603,6 +608,20 @@ public class TravelPlanService {
                 plan.getUpdatedAt(),
                 plan.getExperiencePreferences() == null
                         ? List.of()
-                        : List.copyOf(plan.getExperiencePreferences()));
+                        : List.copyOf(plan.getExperiencePreferences()),
+                estimatedCostOf(plan.getPlanId()));
+    }
+
+    /**
+     * Tổng chi phí Backend tính từ lịch trình ACTIVE (view itinerary_cost_summary); null nếu kế
+     * hoạch chưa có lịch trình ACTIVE nào.
+     */
+    private BigDecimal estimatedCostOf(Long planId) {
+        return itineraryRepository
+                .findFirstByPlanPlanIdAndStatusOrderByVersionNumberDesc(planId, "ACTIVE")
+                .flatMap(itinerary ->
+                        itinerarySummaryRepository.findCostSummary(itinerary.getItineraryId()))
+                .map(ItinerarySummaryRepository.CostSummary::totalEstimatedCost)
+                .orElse(null);
     }
 }
