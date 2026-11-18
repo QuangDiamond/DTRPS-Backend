@@ -4,14 +4,18 @@ package com.dtrps.modules.itinerary.service;
 import com.dtrps.exception.ApiException;
 import com.dtrps.modules.itinerary.dto.TravelPlanDtos;
 import com.dtrps.modules.itinerary.entity.TravelPlan;
+import com.dtrps.modules.itinerary.entity.PlanPlace;
 import com.dtrps.modules.itinerary.repository.ItineraryRepository;
 import com.dtrps.modules.itinerary.repository.ItinerarySummaryRepository;
 import com.dtrps.modules.itinerary.repository.PlanInterestRepository;
+import com.dtrps.modules.itinerary.repository.PlanPlaceRepository;
 import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
 import com.dtrps.modules.itinerary.repository.TripDayProgressRepository;
 import com.dtrps.modules.itinerary.repository.TripProgressRepository;
 import com.dtrps.modules.poi.entity.PlaceCategory;
+import com.dtrps.modules.poi.entity.PlacePrice;
 import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
+import com.dtrps.modules.poi.repository.PlacePriceRepository;
 import com.dtrps.modules.user.entity.User;
 import com.dtrps.modules.user.repository.UserRepository;
 
@@ -20,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -66,6 +71,8 @@ public class TravelPlanService {
     private final PlanInterestRepository planInterestRepository;
     private final ItineraryRepository itineraryRepository;
     private final ItinerarySummaryRepository itinerarySummaryRepository;
+    private final PlanPlaceRepository planPlaceRepository;
+    private final PlacePriceRepository placePriceRepository;
     private final TripDayProgressRepository tripDayProgressRepository;
     private final TripProgressRepository tripProgressRepository;
     private final UserRepository userRepository;
@@ -76,6 +83,8 @@ public class TravelPlanService {
             PlanInterestRepository planInterestRepository,
             ItineraryRepository itineraryRepository,
             ItinerarySummaryRepository itinerarySummaryRepository,
+            PlanPlaceRepository planPlaceRepository,
+            PlacePriceRepository placePriceRepository,
             TripDayProgressRepository tripDayProgressRepository,
             TripProgressRepository tripProgressRepository,
             UserRepository userRepository,
@@ -85,6 +94,8 @@ public class TravelPlanService {
         this.planInterestRepository = planInterestRepository;
         this.itineraryRepository = itineraryRepository;
         this.itinerarySummaryRepository = itinerarySummaryRepository;
+        this.planPlaceRepository = planPlaceRepository;
+        this.placePriceRepository = placePriceRepository;
         this.tripDayProgressRepository = tripDayProgressRepository;
         this.tripProgressRepository = tripProgressRepository;
         this.userRepository = userRepository;
@@ -613,15 +624,49 @@ public class TravelPlanService {
     }
 
     /**
-     * Tổng chi phí Backend tính từ lịch trình ACTIVE (view itinerary_cost_summary); null nếu kế
-     * hoạch chưa có lịch trình ACTIVE nào.
+     * Tổng chi phí Backend tính được cho kế hoạch: ưu tiên lịch trình ACTIVE (view
+     * itinerary_cost_summary, chính xác hơn vì có đủ hoạt động từng ngày); chưa có lịch trình thì
+     * ước tính tạm bằng tổng giá tham khảo của các địa điểm đã chọn. Null nếu không có dữ liệu nào.
      */
     private BigDecimal estimatedCostOf(Long planId) {
-        return itineraryRepository
+        BigDecimal fromItinerary = itineraryRepository
                 .findFirstByPlanPlanIdAndStatusOrderByVersionNumberDesc(planId, "ACTIVE")
                 .flatMap(itinerary ->
                         itinerarySummaryRepository.findCostSummary(itinerary.getItineraryId()))
                 .map(ItinerarySummaryRepository.CostSummary::totalEstimatedCost)
                 .orElse(null);
+
+        return fromItinerary != null
+                ? fromItinerary
+                : estimatedCostFromSelectedPlaces(planId);
+    }
+
+    /**
+     * Chưa có lịch trình: cộng giá tham khảo thấp nhất (VND) của từng địa điểm đã chọn. Địa điểm
+     * chưa có giá thì bỏ qua (không tính là 0đ); không có địa điểm nào có giá thì trả về null.
+     */
+    private BigDecimal estimatedCostFromSelectedPlaces(Long planId) {
+        List<PlanPlace> selectedPlaces =
+                planPlaceRepository.findByPlanPlanIdOrderByPriorityDescPlanPlaceIdAsc(planId);
+        if (selectedPlaces.isEmpty()) {
+            return null;
+        }
+
+        List<Long> placeIds =
+                selectedPlaces.stream().map(p -> p.getPlace().getPlaceId()).toList();
+
+        Map<Long, BigDecimal> cheapestByPlace =
+                placePriceRepository.findByPlacePlaceIdInOrderByPriceIdAsc(placeIds).stream()
+                        .filter(price -> "VND".equals(price.getCurrency()))
+                        .collect(
+                                Collectors.toMap(
+                                        price -> price.getPlace().getPlaceId(),
+                                        PlacePrice::getAmount,
+                                        BigDecimal::min));
+
+        if (cheapestByPlace.isEmpty()) {
+            return null;
+        }
+        return cheapestByPlace.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }
