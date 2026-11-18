@@ -45,7 +45,10 @@ public class TripNavigationController {
      * GET /api/travel-plans/{planId}/navigation/days/{dayNumber}/next-route
      *
      * Ví dụ query:
-     * ?fromLat=21.0285&fromLng=105.8542&vehicle=car
+     * ?fromLat=21.0285&fromLng=105.8542&accuracy=18&vehicle=car
+     *
+     * accuracy (mét, không bắt buộc) là sai số GPS trình duyệt báo về;
+     * dùng để quyết định bán kính "đã đến nơi".
      *
      * Service thực hiện:
      * 1. Kiểm tra Traveller sở hữu TravelPlan.
@@ -75,6 +78,10 @@ public class TripNavigationController {
             @DecimalMin("-180")
             @DecimalMax("180")
             double fromLng,
+            @RequestParam(required = false)
+            @DecimalMin("0")
+            @DecimalMax("1000000")
+            Double accuracy,
             @RequestParam(defaultValue = "car")
             @Pattern(
                     regexp = "^(car|bike|taxi|truck|hd)$",
@@ -88,6 +95,7 @@ public class TripNavigationController {
                 dayNumber,
                 fromLat,
                 fromLng,
+                accuracy,
                 vehicle
         );
     }

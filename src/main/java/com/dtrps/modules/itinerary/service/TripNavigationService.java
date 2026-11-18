@@ -18,6 +18,7 @@ import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
 import com.dtrps.modules.itinerary.repository.TripDayProgressRepository;
 import com.dtrps.modules.itinerary.repository.TripProgressRepository;
 import com.dtrps.modules.maps.dto.RouteResponse;
+import com.dtrps.modules.maps.service.GeoDistance;
 import com.dtrps.modules.maps.service.MapService;
 import com.dtrps.modules.poi.entity.Place;
 import java.util.List;
@@ -49,6 +50,20 @@ public class TripNavigationService {
 
     private static final Set<String> VEHICLES =
             Set.of("car", "bike", "taxi", "truck", "hd");
+
+    /**
+     * Xa hơn mức này (đường chim bay) thì GPS gần như chắc chắn sai
+     * (VPN, giả lập vị trí, định vị theo IP...) nên không gọi Goong.
+     * Đã lớn hơn chiều dài nước Việt Nam.
+     */
+    static final double MAX_NAVIGATION_METERS = 2_500_000;
+
+    /** Bán kính "đã đến nơi": theo sai số GPS, nhưng kẹp trong khoảng này. */
+    static final double ARRIVAL_MIN_METERS = 50;
+    static final double ARRIVAL_MAX_METERS = 100;
+
+    /** Sai số GPS lớn hơn mức này thì vị trí chỉ mang tính tham khảo. */
+    static final double LOW_ACCURACY_METERS = 200;
 
     private final TravelPlanRepository planRepository;
     private final ItineraryRepository itineraryRepository;
@@ -92,6 +107,7 @@ public class TripNavigationService {
             Integer dayNumber,
             double fromLat,
             double fromLng,
+            Double accuracyMeters,
             String vehicle) {
 
         validateCoordinates(fromLat, fromLng, "GPS hiện tại");
@@ -190,15 +206,36 @@ public class TripNavigationService {
                     "Địa điểm tiếp theo chưa có tọa độ hợp lệ để chỉ đường");
         }
 
-        // 10. Gọi Goong Directions thông qua MapService.
-        RouteResponse route = mapService.directions(
-                fromLat,
-                fromLng,
-                toLat,
-                toLng,
-                normalizedVehicle);
+        // 10. Kiểm tra GPS có hợp lý so với điểm đến không.
+        double straightLine = GeoDistance.meters(
+                fromLat, fromLng, toLat, toLng);
 
-        // 11. Trả điểm đến và tuyến đường cho Frontend.
+        if (straightLine > MAX_NAVIGATION_METERS) {
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Vị trí GPS hiện tại cách địa điểm khoảng "
+                            + Math.round(straightLine / 1000)
+                            + " km nên có vẻ không đúng. "
+                            + "Hãy kiểm tra lại định vị hoặc chọn vị trí xuất phát trên bản đồ");
+        }
+
+        boolean arrived = isArrived(straightLine, accuracyMeters);
+        boolean lowAccuracy = accuracyMeters != null
+                && accuracyMeters > LOW_ACCURACY_METERS;
+
+        // 11. Đã đến nơi thì không cần gọi Goong nữa.
+        // Gọi Goong lúc này không có ích (đoạn quá ngắn) và có thể báo
+        // "không có đường" đúng lúc Traveller sắp xác nhận đã đến.
+        RouteResponse route = arrived
+                ? arrivedRoute(straightLine)
+                : mapService.directions(
+                        fromLat,
+                        fromLng,
+                        toLat,
+                        toLng,
+                        normalizedVehicle);
+
+        // 12. Trả điểm đến và tuyến đường cho Frontend.
         return new TripNavigationDtos.NextRouteResponse(
                 plan.getPlanId(),
                 itinerary.getItineraryId(),
@@ -212,7 +249,36 @@ public class TripNavigationService {
                 toLat,
                 toLng,
                 normalizedVehicle,
-                route);
+                route,
+                Math.round(straightLine),
+                arrived,
+                lowAccuracy);
+    }
+
+    /**
+     * GPS nằm trong bán kính đến nơi. Bán kính theo sai số GPS để GPS yếu
+     * không làm "chưa bao giờ đến", nhưng không quá 100 m để không báo đến sớm.
+     */
+    static boolean isArrived(double straightLineMeters, Double accuracyMeters) {
+        double radius = accuracyMeters == null
+                ? ARRIVAL_MIN_METERS
+                : Math.min(
+                        ARRIVAL_MAX_METERS,
+                        Math.max(ARRIVAL_MIN_METERS, accuracyMeters));
+
+        return straightLineMeters <= radius;
+    }
+
+    private static RouteResponse arrivedRoute(double straightLineMeters) {
+        long meters = Math.round(straightLineMeters);
+
+        return new RouteResponse(
+                meters,
+                0,
+                meters + " m",
+                "0 phút",
+                "",
+                List.of());
     }
 
     /**
