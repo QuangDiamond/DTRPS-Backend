@@ -121,5 +121,9 @@ public final class TravelPlanDtos {
             List<String> allowedNextStatuses,
             Instant createdAt,
             Instant updatedAt,
-            List<String> experiencePreferences) {}
+            List<String> experiencePreferences,
+
+            // Tổng chi phí Backend tính từ lịch trình ACTIVE (tổng estimated_cost các hoạt động);
+            // null nếu kế hoạch chưa có lịch trình. Khác với budget (ngân sách người dùng tự nhập).
+            BigDecimal estimatedCost) {}
 }
