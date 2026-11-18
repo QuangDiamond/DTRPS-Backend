@@ -53,6 +53,13 @@ public class TravelPlanService {
 
     private static final int MAX_CODES = 50;
 
+    private static final Set<String> EXPERIENCE_CODES = Set.of(
+            "PURPOSE_RELAX", "PURPOSE_ADVENTURE", "PURPOSE_BOND", "PURPOSE_FUN", "PURPOSE_CULTURE", "PURPOSE_ROMANCE",
+            "STYLE_QUIET", "STYLE_ACTIVE", "STYLE_FREE", "STYLE_PLANNED", "STYLE_COMFORT", "STYLE_LOCAL",
+            "EXPERIENCE_NATURE", "EXPERIENCE_FOOD", "EXPERIENCE_PHOTO", "EXPERIENCE_OUTDOOR", "EXPERIENCE_ART_CULTURE", "EXPERIENCE_WELLNESS",
+            "MEMORY_PHOTOS", "MEMORY_STORIES", "MEMORY_UNFORGETTABLE", "MEMORY_TOGETHER"
+    );
+
     private final TravelPlanRepository planRepository;
     private final PlanInterestRepository planInterestRepository;
     private final ItineraryRepository itineraryRepository;
@@ -410,6 +417,11 @@ public class TravelPlanService {
 
         plan.setDescription(fields.description());
 
+        if (fields.experiencePreferences() != null) {
+            plan.setExperiencePreferences(new ArrayList<>(
+                    validateExperiencePreferences(fields.experiencePreferences())));
+        }
+
         plan.setCategoryCodes(
                 new ArrayList<>(
                         validateCategoryCodes(fields.categoryCodes())));
@@ -423,6 +435,21 @@ public class TravelPlanService {
     // =========================================================
     // HÀM PHỤ — DANH MỤC TRẢI NGHIỆM
     // =========================================================
+
+    private static List<String> validateExperiencePreferences(List<String> codes) {
+        if (codes.size() > EXPERIENCE_CODES.size()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Chỉ được chọn tối đa " + EXPERIENCE_CODES.size() + " sở thích trải nghiệm");
+        }
+        checkCodeList(codes, "Sở thích trải nghiệm");
+        for (String code : codes) {
+            if (!EXPERIENCE_CODES.contains(code)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST,
+                        "Sở thích trải nghiệm không hợp lệ: " + code);
+            }
+        }
+        return List.copyOf(codes);
+    }
 
     private List<String> validateCategoryCodes(
             List<String> requestedCodes) {
@@ -573,6 +600,9 @@ public class TravelPlanService {
                 plan.getStatus(),
                 allowedManualNext(plan.getStatus()),
                 plan.getCreatedAt(),
-                plan.getUpdatedAt());
+                plan.getUpdatedAt(),
+                plan.getExperiencePreferences() == null
+                        ? List.of()
+                        : List.copyOf(plan.getExperiencePreferences()));
     }
 }
