@@ -67,4 +67,23 @@ public class Subscription {
   @ColumnDefault("now()")
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt;
+
+  // ===== Gói quảng cáo lúc mua: đổi bảng giá sau đó không ảnh hưởng đăng ký này =====
+  // Giá lúc mua nằm ở monthlyFee.
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "package_id")
+  private AdPackage adPackage;
+
+  @Column(name = "package_name", length = 150)
+  private String packageName;
+
+  @Column(name = "max_places")
+  private Integer maxPlaces;
+
+  @Column(name = "duration_days")
+  private Integer durationDays;
+
+  @Column(name = "cancel_reason", columnDefinition = "text")
+  private String cancelReason;
 }

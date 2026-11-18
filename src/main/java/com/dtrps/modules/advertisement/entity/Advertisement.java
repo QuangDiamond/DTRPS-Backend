@@ -1,6 +1,7 @@
 package com.dtrps.modules.advertisement.entity;
 
 import com.dtrps.modules.businessowner.entity.BusinessListing;
+import com.dtrps.modules.payment.entity.Subscription;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -73,4 +74,12 @@ public class Advertisement {
   @ColumnDefault("now()")
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt;
+
+  /** Đăng ký gói mà quảng cáo này đang chiếm một lượt */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "subscription_id")
+  private Subscription subscription;
+
+  @Column(name = "suspend_reason", columnDefinition = "text")
+  private String suspendReason;
 }

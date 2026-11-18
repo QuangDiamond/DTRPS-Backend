@@ -136,3 +136,19 @@ BEGIN
 END
 $$
 @@
+
+-- Mã đơn PayOS: lấy từ DB để các máy cùng dùng DB chung không tạo trùng
+CREATE SEQUENCE IF NOT EXISTS payment_order_code_seq START WITH 100000
+@@
+
+-- Mỗi đối tác chỉ có một đơn mua gói đang chờ thanh toán
+CREATE UNIQUE INDEX IF NOT EXISTS uq_business_pending_subscription
+ON subscriptions(business_id)
+WHERE status = 'PENDING'
+@@
+
+-- Một địa điểm không chiếm hai lượt trong cùng một đăng ký
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ad_subscription_listing
+ON advertisements(subscription_id, listing_id)
+WHERE status IN ('PUBLISHED', 'SUSPENDED')
+@@

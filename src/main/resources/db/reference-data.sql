@@ -122,3 +122,9 @@ INSERT INTO system_settings (setting_key, setting_value) VALUES
     ('listing_sla_hours', '24'),
     ('session_timeout_minutes', '30')
 ON CONFLICT DO NOTHING;
+
+
+-- 7. Gói quảng cáo mặc định của đối tác: admin đổi giá, thêm gói trên trang quản trị
+INSERT INTO ad_packages (code, name, description, price, duration_days, max_places, status, sort_order) VALUES
+    ('BASIC_3', 'Gói Cơ bản', 'Quảng cáo 3 địa điểm trên trang chủ trong 30 ngày', 100000, 30, 3, 'ACTIVE', 1)
+ON CONFLICT DO NOTHING;

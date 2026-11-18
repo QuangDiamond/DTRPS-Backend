@@ -88,6 +88,17 @@ app:
     # A verified code gives a one-time ticket to finish sign-up / set the new password
     ticket-ttl: ${OTP_TICKET_TTL:15m}
     from-name: SmartTravel
+  # Partner ad packages paid through PayOS. Blank keys disable checkout (503).
+  payos:
+    client-id: ${PAYOS_CLIENT_ID:}
+    api-key: ${PAYOS_API_KEY:}
+    checksum-key: ${PAYOS_CHECKSUM_KEY:}
+    base-url: ${PAYOS_BASE_URL:https://api-merchant.payos.vn}
+    # Where PayOS sends the partner back after paying
+    web-url: ${APP_WEB_URL:http://localhost:5173}
+    link-ttl: ${PAYOS_LINK_TTL:15m}
+    # Background jobs run on the server only: every local run shares the same database
+    jobs-enabled: ${PAYOS_JOBS_ENABLED:false}
   # AI recommendation: OpenAI embeddings. Put OPENAI_API_KEY in .env.local.
   openai:
     api-key: ${OPENAI_API_KEY:}

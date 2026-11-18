@@ -93,4 +93,44 @@ public class Payment {
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "renewal_window_id")
   private SubscriptionRenewalWindow renewalWindow;
+
+  // ===== PayOS =====
+
+  @Column(name = "payment_link_id", length = 100)
+  private String paymentLinkId;
+
+  @Column(name = "checkout_url", columnDefinition = "text")
+  private String checkoutUrl;
+
+  @Column(name = "link_expires_at")
+  private Instant linkExpiresAt;
+
+  @Column(name = "gateway_status", length = 30)
+  private String gatewayStatus;
+
+  @Column(name = "bank_reference", length = 255)
+  private String bankReference;
+
+  /** Giao dịch bất thường (sai số tiền, trả trùng…) chờ admin xử lý */
+  @ColumnDefault("false")
+  @Column(name = "needs_review", nullable = false)
+  private boolean needsReview = false;
+
+  @Column(name = "review_note", columnDefinition = "text")
+  private String reviewNote;
+
+  // ===== Hoàn tiền: admin chuyển khoản tay rồi ghi nhận =====
+
+  @Column(name = "refund_reference", length = 255)
+  private String refundReference;
+
+  @Column(name = "refund_reason", columnDefinition = "text")
+  private String refundReason;
+
+  @Column(name = "refunded_at")
+  private Instant refundedAt;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "refunded_by")
+  private User refundedBy;
 }

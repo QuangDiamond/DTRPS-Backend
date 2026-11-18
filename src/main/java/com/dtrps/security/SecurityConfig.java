@@ -101,8 +101,15 @@ public class SecurityConfig {
                                         .hasRole("ADMIN")
 
                                         // Public read-only APIs.
+                                        // PayOS gọi về, xác thực bằng chữ ký trong nội dung.
+                                        .requestMatchers(
+                                                HttpMethod.POST,
+                                                "/api/payments/payos/webhook")
+                                        .permitAll()
+
                                         .requestMatchers(
                                                 HttpMethod.GET,
+                                                "/api/featured-places",
                                                 "/api/reference/**",
                                                 "/api/places",
                                                 "/api/places/{id}",
