@@ -85,6 +85,7 @@ public class AdminAdService {
 
   @Transactional
   public AdDtos.PackageItem createPackage(Long adminId, AdDtos.PackageRequest request) {
+    requireUnique(null, request);
     AdPackage item = new AdPackage();
     item.setCode("PKG_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT));
     apply(item, request);
@@ -97,6 +98,7 @@ public class AdminAdService {
   @Transactional
   public AdDtos.PackageItem updatePackage(Long adminId, Long id, AdDtos.PackageRequest request) {
     AdPackage item = requirePackage(id);
+    requireUnique(id, request);
     apply(item, request);
     auditService.record(adminId, "AD_PACKAGE_UPDATED", "ad_packages", id);
     return AdMappers.toPackage(item);
@@ -112,11 +114,30 @@ public class AdminAdService {
 
   private static void apply(AdPackage item, AdDtos.PackageRequest request) {
     item.setName(request.name().trim());
-    item.setDescription(request.description());
-    item.setPrice(BigDecimal.valueOf(request.price()));
-    item.setDurationDays(request.durationDays());
-    item.setMaxPlaces(request.maxPlaces());
-    item.setSortOrder(request.sortOrder() == null ? 0 : request.sortOrder());
+    item.setDescription(hasText(request.description()) ? request.description().trim() : null);
+    item.setPrice(request.price());
+    item.setDurationDays(request.durationDays().intValueExact());
+    item.setMaxPlaces(request.maxPlaces().intValueExact());
+    item.setSortOrder(request.sortOrder().intValueExact());
+  }
+
+  /** Tên và thứ tự không trùng với gói khác, kể cả gói đã tắt. */
+  private void requireUnique(Long packageId, AdDtos.PackageRequest request) {
+    String name = request.name().trim();
+    int sortOrder = request.sortOrder().intValueExact();
+    for (AdPackage other : packages.findAll()) {
+      if (other.getPackageId().equals(packageId)) {
+        continue;
+      }
+      if (other.getName().equalsIgnoreCase(name)) {
+        throw new ApiException(HttpStatus.CONFLICT, "Tên gói này đã tồn tại");
+      }
+      if (other.getSortOrder() == sortOrder) {
+        throw new ApiException(
+            HttpStatus.CONFLICT,
+            "Thứ tự " + sortOrder + " đang được dùng cho gói \"" + other.getName() + "\"");
+      }
+    }
   }
 
   private AdPackage requirePackage(Long id) {
