@@ -29,6 +29,12 @@ public final class TripNavigationDtos {
      * - distanceText
      * - durationText
      * - polyline
+     * - steps (từng chỉ dẫn rẽ)
+     *
+     * straightLineMeters: khoảng cách đường chim bay từ GPS tới điểm đến.
+     * arrived: GPS đã nằm trong bán kính đến nơi (50–100 m tùy sai số GPS).
+     * Frontend chỉ dùng để gợi ý; việc xác nhận đã đến vẫn do Traveller bấm.
+     * lowAccuracy: sai số GPS lớn (trên 200 m), vị trí chỉ mang tính tham khảo.
      */
     public record NextRouteResponse(
             Long planId,
@@ -43,6 +49,9 @@ public final class TripNavigationDtos {
             Double destinationLatitude,
             Double destinationLongitude,
             String vehicle,
-            RouteResponse route
+            RouteResponse route,
+            long straightLineMeters,
+            boolean arrived,
+            boolean lowAccuracy
     ) {}
 }

@@ -4,6 +4,7 @@ import com.dtrps.exception.ApiException;
 import com.dtrps.modules.maps.dto.AddressSuggestion;
 import com.dtrps.modules.maps.dto.GeoLocation;
 import com.dtrps.modules.maps.dto.RouteResponse;
+import com.dtrps.modules.maps.dto.RouteStep;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -91,9 +92,16 @@ public class MapService {
     JsonNode route = routes.get(0);
     long meters = 0;
     long seconds = 0;
+    List<RouteStep> steps = new ArrayList<>();
     for (JsonNode leg : route.path("legs")) {
       meters += leg.path("distance").path("value").asLong();
       seconds += leg.path("duration").path("value").asLong();
+      for (JsonNode step : leg.path("steps")) {
+        RouteStep parsed = parseStep(step);
+        if (parsed != null) {
+          steps.add(parsed);
+        }
+      }
     }
     JsonNode firstLeg = route.path("legs").path(0);
     return new RouteResponse(
@@ -101,7 +109,46 @@ public class MapService {
         seconds,
         firstLeg.path("distance").path("text").asText(null),
         firstLeg.path("duration").path("text").asText(null),
-        route.path("overview_polyline").path("points").asText(""));
+        route.path("overview_polyline").path("points").asText(""),
+        steps);
+  }
+
+  /** One Goong step, or null when it has no usable start/end point. */
+  private static RouteStep parseStep(JsonNode step) {
+    JsonNode start = step.path("start_location");
+    JsonNode end = step.path("end_location");
+    if (!start.hasNonNull("lat") || !start.hasNonNull("lng")
+        || !end.hasNonNull("lat") || !end.hasNonNull("lng")) {
+      return null;
+    }
+    return new RouteStep(
+        plainText(step.path("html_instructions").asText("")),
+        step.path("maneuver").asText(null),
+        step.path("distance").path("value").asLong(),
+        step.path("duration").path("value").asLong(),
+        step.path("distance").path("text").asText(null),
+        start.path("lat").asDouble(),
+        start.path("lng").asDouble(),
+        end.path("lat").asDouble(),
+        end.path("lng").asDouble());
+  }
+
+  /** Goong sends instructions as HTML ("Rẽ <b>phải</b> vào ..."); the clients show plain text. */
+  static String plainText(String html) {
+    if (html == null || html.isBlank()) {
+      return "";
+    }
+    return html
+        .replaceAll("(?i)<(div|br|p)[^>]*>", " ")
+        .replaceAll("<[^>]+>", "")
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replaceAll("\\s+", " ")
+        .trim();
   }
 
   private static GeoLocation location(JsonNode node, String fallbackPlaceId) {
