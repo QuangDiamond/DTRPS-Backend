@@ -16,11 +16,13 @@ import com.dtrps.modules.itinerary.entity.TravelPlan;
 import com.dtrps.modules.itinerary.repository.ItineraryRepository;
 import com.dtrps.modules.itinerary.repository.ItinerarySummaryRepository;
 import com.dtrps.modules.itinerary.repository.PlanInterestRepository;
+import com.dtrps.modules.itinerary.repository.PlanPlaceRepository;
 import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
 import com.dtrps.modules.itinerary.repository.TripDayProgressRepository;
 import com.dtrps.modules.itinerary.repository.TripProgressRepository;
 import com.dtrps.modules.poi.entity.PlaceCategory;
 import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
+import com.dtrps.modules.poi.repository.PlacePriceRepository;
 import com.dtrps.modules.user.entity.User;
 import com.dtrps.modules.user.repository.UserRepository;
 import java.math.BigDecimal;
@@ -51,6 +53,8 @@ class TravelPlanServiceTest {
   @Mock private PlanInterestRepository planInterestRepository;
   @Mock private ItineraryRepository itineraryRepository;
   @Mock private ItinerarySummaryRepository itinerarySummaryRepository;
+  @Mock private PlanPlaceRepository planPlaceRepository;
+  @Mock private PlacePriceRepository placePriceRepository;
   @Mock private TripDayProgressRepository tripDayProgressRepository;
   @Mock private TripProgressRepository tripProgressRepository;
   @Mock private UserRepository userRepository;
@@ -67,6 +71,8 @@ class TravelPlanServiceTest {
             planInterestRepository,
             itineraryRepository,
             itinerarySummaryRepository,
+            planPlaceRepository,
+            placePriceRepository,
             tripDayProgressRepository,
             tripProgressRepository,
             userRepository,
