@@ -3,6 +3,7 @@ package com.dtrps.modules.payment.controller;
 import com.dtrps.common.PageResponse;
 import com.dtrps.modules.payment.dto.AdDtos;
 import com.dtrps.modules.payment.service.PartnerAdService;
+import com.dtrps.modules.payment.service.PaymentIssueService;
 import com.dtrps.security.CurrentUser;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -31,9 +32,11 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('BUSINESS_OWNER')")
 public class PartnerAdController {
   private final PartnerAdService adService;
+  private final PaymentIssueService issueService;
 
-  public PartnerAdController(PartnerAdService adService) {
+  public PartnerAdController(PartnerAdService adService, PaymentIssueService issueService) {
     this.adService = adService;
+    this.issueService = issueService;
   }
 
   @GetMapping("/ad-packages")
@@ -77,6 +80,22 @@ public class PartnerAdController {
   public AdDtos.PaymentItem cancel(
       @AuthenticationPrincipal Jwt jwt, @PathVariable long orderCode) {
     return adService.cancelPayment(CurrentUser.id(jwt), orderCode);
+  }
+
+  /** "Tôi đã thanh toán, kiểm tra lại": hỏi lại PayOS ngay */
+  @PostMapping("/payments/{orderCode}/check")
+  public AdDtos.PaymentItem check(
+      @AuthenticationPrincipal Jwt jwt, @PathVariable long orderCode) {
+    return adService.checkPayment(CurrentUser.id(jwt), orderCode);
+  }
+
+  @PostMapping("/payments/{orderCode}/issues")
+  @ResponseStatus(HttpStatus.CREATED)
+  public void reportIssue(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable long orderCode,
+      @Valid @RequestBody AdDtos.ReportIssueRequest request) {
+    issueService.report(CurrentUser.id(jwt), orderCode, request);
   }
 
   @GetMapping("/ad-slots")

@@ -1,13 +1,17 @@
 package com.dtrps.modules.payment.service;
 
+import com.dtrps.exception.ApiException;
 import com.dtrps.modules.admin.service.AuditService;
 import com.dtrps.modules.notification.dto.Notice;
 import com.dtrps.modules.notification.service.NotificationService;
 import com.dtrps.modules.payment.entity.Payment;
+import com.dtrps.modules.payment.entity.PaymentIssue;
 import com.dtrps.modules.payment.entity.Subscription;
+import com.dtrps.modules.payment.repository.PaymentIssueRepository;
 import com.dtrps.modules.payment.repository.PaymentRepository;
 import com.dtrps.modules.payment.repository.SubscriptionRenewalWindowRepository;
 import com.dtrps.modules.payment.repository.SubscriptionRepository;
+import com.dtrps.modules.user.repository.UserRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
@@ -17,6 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +49,8 @@ public class AdPaymentResultService {
   private final PaymentRepository payments;
   private final SubscriptionRepository subscriptions;
   private final SubscriptionRenewalWindowRepository windows;
+  private final PaymentIssueRepository issues;
+  private final UserRepository users;
   private final AdSubscriptionOps subscriptionOps;
   private final AuditService auditService;
   private final NotificationService notifications;
@@ -53,6 +60,8 @@ public class AdPaymentResultService {
       PaymentRepository payments,
       SubscriptionRepository subscriptions,
       SubscriptionRenewalWindowRepository windows,
+      PaymentIssueRepository issues,
+      UserRepository users,
       AdSubscriptionOps subscriptionOps,
       AuditService auditService,
       NotificationService notifications,
@@ -60,6 +69,8 @@ public class AdPaymentResultService {
     this.payments = payments;
     this.subscriptions = subscriptions;
     this.windows = windows;
+    this.issues = issues;
+    this.users = users;
     this.subscriptionOps = subscriptionOps;
     this.auditService = auditService;
     this.notifications = notifications;
@@ -102,6 +113,50 @@ public class AdPaymentResultService {
           payment, "Sai số tiền: cần " + payment.getAmount() + ", PayOS báo " + amountPaid);
       return;
     }
+    complete(payment);
+  }
+
+  /**
+   * PayOS không ghi nhận nhưng admin đã thấy tiền trong sao kê: kích hoạt tay từ phiếu sự cố. Không
+   * kích hoạt được thì huỷ toàn bộ thay đổi và báo lỗi cho admin.
+   */
+  @Transactional
+  public void activateFromIssue(Long adminId, Long issueId, String bankReference, String reason) {
+    PaymentIssue issue =
+        issues
+            .lockById(issueId)
+            .orElseThrow(
+                () -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy phiếu sự cố"));
+    if (!"OPEN".equals(issue.getStatus())) {
+      throw new ApiException(HttpStatus.CONFLICT, "Phiếu này đã được xử lý");
+    }
+    Payment payment =
+        payments
+            .lockByReference(GATEWAY, issue.getPayment().getTransactionReference())
+            .orElseThrow();
+    if (SUCCESS.equals(payment.getStatus()) || "REFUNDED".equals(payment.getStatus())) {
+      throw new ApiException(HttpStatus.CONFLICT, "Đơn này đã được ghi nhận thanh toán");
+    }
+    payment.setBankReference(bankReference);
+    payment.setGatewayStatus("MANUAL");
+    if (!complete(payment)) {
+      throw new ApiException(
+          HttpStatus.CONFLICT,
+          "Không kích hoạt được: đối tác đang có gói khác hoặc gói cần gia hạn đã kết thúc");
+    }
+    payment.setNeedsReview(false);
+    issue.setResolutionNote(reason);
+    issue.setHandledBy(users.getReferenceById(adminId));
+    auditService.record(
+        adminId,
+        "AD_PAYMENT_MANUAL_ACTIVATED",
+        AUDIT_ENTITY,
+        payment.getPaymentId(),
+        bankReference + ": " + reason);
+  }
+
+  /** Ghi nhận đã thanh toán và kích hoạt dịch vụ; trả false nếu không kích hoạt được. */
+  private boolean complete(Payment payment) {
     Instant now = clock.instant();
     payment.setStatus(SUCCESS);
     payment.setPaidAt(now);
@@ -117,8 +172,17 @@ public class AdPaymentResultService {
     auditService.record(
         userId, "AD_PAYMENT_SUCCESS", AUDIT_ENTITY, payment.getPaymentId(), payment.getAmount().toPlainString());
     if (!activated) {
-      return;
+      return false;
     }
+    // Phiếu sự cố đang mở của đơn này không còn cần xử lý
+    issues
+        .findFirstByPaymentPaymentIdAndStatus(payment.getPaymentId(), "OPEN")
+        .ifPresent(
+            issue -> {
+              issue.setStatus("RESOLVED");
+              issue.setResolutionNote("PayOS đã xác nhận thanh toán");
+              issue.setHandledAt(now);
+            });
     Notice notice =
         new Notice(
             "AD_PAYMENT_SUCCESS",
@@ -140,6 +204,7 @@ public class AdPaymentResultService {
             "/admin/payments",
             data(payment)),
         null);
+    return true;
   }
 
   /** Mua mới: gói tính từ lúc thanh toán. Đã có gói khác đang chạy thì để admin hoàn tiền. */

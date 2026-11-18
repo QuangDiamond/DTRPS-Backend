@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -37,6 +38,9 @@ public final class AdDtos {
       long daysLeft,
       long usedSlots) {}
 
+  /** Phiếu sự cố mới nhất của đơn: OPEN, RESOLVED hoặc REJECTED */
+  public record PaymentIssueInfo(Long id, String status, String resolutionNote) {}
+
   public record PaymentItem(
       Long id,
       String orderCode,
@@ -48,7 +52,26 @@ public final class AdDtos {
       String checkoutUrl,
       Instant linkExpiresAt,
       Instant paidAt,
-      Instant createdAt) {}
+      Instant createdAt,
+      PaymentIssueInfo issue) {}
+
+  /** Đối tác báo đã chuyển tiền mà đơn chưa được ghi nhận; biên lai tải lên qua /uploads/images */
+  public record ReportIssueRequest(
+      @NotNull(message = "Vui lòng nhập số tiền đã chuyển")
+          @Digits(integer = 12, fraction = 0, message = "Số tiền phải là số nguyên")
+          @Min(value = 1, message = "Số tiền phải lớn hơn 0")
+          BigDecimal transferredAmount,
+      @NotNull(message = "Vui lòng nhập thời gian chuyển khoản")
+          @PastOrPresent(message = "Thời gian chuyển khoản không được ở tương lai")
+          Instant transferredAt,
+      @NotBlank(message = "Vui lòng nhập mã giao dịch ngân hàng")
+          @Size(max = 100, message = "Mã giao dịch tối đa 100 ký tự")
+          String bankReference,
+      @Size(max = 1000, message = "Ghi chú tối đa 1000 ký tự") String note,
+      @NotBlank(message = "Vui lòng tải lên ảnh biên lai")
+          @Size(max = 1000, message = "Đường dẫn biên lai quá dài")
+          @Pattern(regexp = "^https://res\\.cloudinary\\.com/.+", message = "Ảnh biên lai không hợp lệ")
+          String receiptUrl) {}
 
   /** {@code renewable}: đang trong 7 ngày cuối và cửa sổ gia hạn đang mở */
   public record PartnerState(
@@ -127,7 +150,33 @@ public final class AdDtos {
           String status) {}
 
   public record PaymentStats(
-      BigDecimal revenueThisMonth, long success, long pending, long needsReview) {}
+      BigDecimal revenueThisMonth, long success, long pending, long needsReview, long openIssues) {}
+
+  public record AdminPaymentIssue(
+      Long id,
+      Long paymentId,
+      String orderCode,
+      String paymentStatus,
+      Long businessId,
+      String businessName,
+      String packageName,
+      BigDecimal amount,
+      BigDecimal transferredAmount,
+      Instant transferredAt,
+      String bankReference,
+      String note,
+      String receiptUrl,
+      String status,
+      String resolutionNote,
+      Instant handledAt,
+      Instant createdAt) {}
+
+  /** Chỉ kích hoạt tay khi đã thấy tiền trong sao kê ngân hàng */
+  public record ManualActivateRequest(
+      @NotBlank(message = "Vui lòng nhập mã giao dịch ngân hàng")
+          @Size(max = 255, message = "Mã giao dịch tối đa 255 ký tự")
+          String bankReference,
+      @NotBlank(message = "Vui lòng nhập lý do") @Size(max = 1000) String reason) {}
 
   public record AdminPayment(
       Long id,

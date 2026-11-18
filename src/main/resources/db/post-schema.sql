@@ -152,3 +152,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_ad_subscription_listing
 ON advertisements(subscription_id, listing_id)
 WHERE status IN ('PUBLISHED', 'SUSPENDED')
 @@
+
+-- Mỗi đơn thanh toán chỉ có một phiếu sự cố đang mở
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_issue_open
+ON payment_issues(payment_id)
+WHERE status = 'OPEN'
+@@

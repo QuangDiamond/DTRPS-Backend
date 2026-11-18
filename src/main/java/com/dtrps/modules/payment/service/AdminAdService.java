@@ -12,6 +12,7 @@ import com.dtrps.modules.payment.entity.AdPackage;
 import com.dtrps.modules.payment.entity.Payment;
 import com.dtrps.modules.payment.entity.Subscription;
 import com.dtrps.modules.payment.repository.AdPackageRepository;
+import com.dtrps.modules.payment.repository.PaymentIssueRepository;
 import com.dtrps.modules.payment.repository.PaymentRepository;
 import com.dtrps.modules.payment.repository.SubscriptionRepository;
 import com.dtrps.modules.user.repository.UserRepository;
@@ -45,6 +46,7 @@ public class AdminAdService {
 
   private final AdPackageRepository packages;
   private final PaymentRepository payments;
+  private final PaymentIssueRepository issues;
   private final SubscriptionRepository subscriptions;
   private final AdvertisementRepository advertisements;
   private final UserRepository users;
@@ -56,6 +58,7 @@ public class AdminAdService {
   public AdminAdService(
       AdPackageRepository packages,
       PaymentRepository payments,
+      PaymentIssueRepository issues,
       SubscriptionRepository subscriptions,
       AdvertisementRepository advertisements,
       UserRepository users,
@@ -65,6 +68,7 @@ public class AdminAdService {
       Clock clock) {
     this.packages = packages;
     this.payments = payments;
+    this.issues = issues;
     this.subscriptions = subscriptions;
     this.advertisements = advertisements;
     this.users = users;
@@ -155,7 +159,8 @@ public class AdminAdService {
         payments.revenueSince(firstDay.atStartOfDay(VIETNAM).toInstant()),
         payments.countByStatus(SUCCESS),
         payments.countByStatus("PENDING"),
-        payments.countByNeedsReviewTrue());
+        payments.countByNeedsReviewTrue(),
+        issues.countByStatus("OPEN"));
   }
 
   @Transactional(readOnly = true)

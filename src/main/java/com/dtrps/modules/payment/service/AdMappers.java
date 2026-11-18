@@ -3,6 +3,7 @@ package com.dtrps.modules.payment.service;
 import com.dtrps.modules.payment.dto.AdDtos;
 import com.dtrps.modules.payment.entity.AdPackage;
 import com.dtrps.modules.payment.entity.Payment;
+import com.dtrps.modules.payment.entity.PaymentIssue;
 import com.dtrps.modules.payment.entity.Subscription;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,7 +40,8 @@ final class AdMappers {
         usedSlots);
   }
 
-  static AdDtos.PaymentItem toPayment(Payment item) {
+  /** {@code issue}: phiếu sự cố mới nhất của đơn, null nếu chưa có */
+  static AdDtos.PaymentItem toPayment(Payment item, PaymentIssue issue) {
     return new AdDtos.PaymentItem(
         item.getPaymentId(),
         item.getTransactionReference(),
@@ -51,7 +53,11 @@ final class AdMappers {
         "PENDING".equals(item.getStatus()) ? item.getCheckoutUrl() : null,
         item.getLinkExpiresAt(),
         item.getPaidAt(),
-        item.getCreatedAt());
+        item.getCreatedAt(),
+        issue == null
+            ? null
+            : new AdDtos.PaymentIssueInfo(
+                issue.getIssueId(), issue.getStatus(), issue.getResolutionNote()));
   }
 
   /** Làm tròn lên: còn vài giờ vẫn tính là còn 1 ngày */

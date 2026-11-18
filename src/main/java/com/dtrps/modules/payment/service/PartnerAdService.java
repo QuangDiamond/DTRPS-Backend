@@ -12,9 +12,11 @@ import com.dtrps.modules.payment.config.PayOsProperties;
 import com.dtrps.modules.payment.dto.AdDtos;
 import com.dtrps.modules.payment.entity.AdPackage;
 import com.dtrps.modules.payment.entity.Payment;
+import com.dtrps.modules.payment.entity.PaymentIssue;
 import com.dtrps.modules.payment.entity.Subscription;
 import com.dtrps.modules.payment.entity.SubscriptionRenewalWindow;
 import com.dtrps.modules.payment.repository.AdPackageRepository;
+import com.dtrps.modules.payment.repository.PaymentIssueRepository;
 import com.dtrps.modules.payment.repository.PaymentRepository;
 import com.dtrps.modules.payment.repository.SubscriptionRenewalWindowRepository;
 import com.dtrps.modules.payment.repository.SubscriptionRepository;
@@ -24,6 +26,7 @@ import com.dtrps.modules.poi.repository.PlaceImageRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -56,6 +59,7 @@ public class PartnerAdService {
   private final SubscriptionRepository subscriptions;
   private final SubscriptionRenewalWindowRepository windows;
   private final PaymentRepository payments;
+  private final PaymentIssueRepository issues;
   private final AdvertisementRepository advertisements;
   private final BusinessProfileRepository profiles;
   private final BusinessListingRepository listings;
@@ -71,6 +75,7 @@ public class PartnerAdService {
       SubscriptionRepository subscriptions,
       SubscriptionRenewalWindowRepository windows,
       PaymentRepository payments,
+      PaymentIssueRepository issues,
       AdvertisementRepository advertisements,
       BusinessProfileRepository profiles,
       BusinessListingRepository listings,
@@ -84,6 +89,7 @@ public class PartnerAdService {
     this.subscriptions = subscriptions;
     this.windows = windows;
     this.payments = payments;
+    this.issues = issues;
     this.advertisements = advertisements;
     this.profiles = profiles;
     this.listings = listings;
@@ -119,7 +125,7 @@ public class PartnerAdService {
             .stream()
             .filter(payment -> hasLiveLink(payment, now))
             .findFirst()
-            .map(AdMappers::toPayment)
+            .map(this::withIssue)
             .orElse(null);
     boolean renewable =
         active
@@ -140,7 +146,35 @@ public class PartnerAdService {
     Page<Payment> page =
         payments.findBySubscriptionBusinessBusinessIdOrderByPaymentIdDesc(
             business(userId).getBusinessId(), pageable);
-    return PageResponse.from(page.map(AdMappers::toPayment));
+    Map<Long, PaymentIssue> latest = latestIssues(page.getContent());
+    return PageResponse.from(
+        page.map(payment -> AdMappers.toPayment(payment, latest.get(payment.getPaymentId()))));
+  }
+
+  /** Đối tác bấm "Tôi đã thanh toán": hỏi lại PayOS, kể cả đơn đã huỷ / hết hạn trên hệ thống. */
+  public AdDtos.PaymentItem checkPayment(Long userId, long orderCode) {
+    Payment payment = ownedPayment(userId, orderCode);
+    if (PENDING.equals(payment.getStatus())
+        || AdPaymentResultService.CANCELLED.equals(payment.getStatus())) {
+      sync.reconcile(orderCode);
+    }
+    return withIssue(ownedPayment(userId, orderCode));
+  }
+
+  private AdDtos.PaymentItem withIssue(Payment payment) {
+    return AdMappers.toPayment(payment, latestIssues(List.of(payment)).get(payment.getPaymentId()));
+  }
+
+  /** Phiếu sự cố mới nhất của từng đơn */
+  private Map<Long, PaymentIssue> latestIssues(Collection<Payment> items) {
+    Map<Long, PaymentIssue> latest = new HashMap<>();
+    if (!items.isEmpty()) {
+      issues
+          .findByPaymentPaymentIdInOrderByIssueIdDesc(
+              items.stream().map(Payment::getPaymentId).toList())
+          .forEach(issue -> latest.putIfAbsent(issue.getPayment().getPaymentId(), issue));
+    }
+    return latest;
   }
 
   /** Trạng thái đơn sau khi quay về từ PayOS: luôn hỏi lại PayOS, không tin tham số trên URL. */
@@ -153,7 +187,7 @@ public class PartnerAdService {
         // PayOS tạm lỗi: trả trạng thái hiện có, trang kết quả sẽ hỏi lại
       }
     }
-    return AdMappers.toPayment(ownedPayment(userId, orderCode));
+    return withIssue(ownedPayment(userId, orderCode));
   }
 
   public AdDtos.PaymentItem cancelPayment(Long userId, long orderCode) {
@@ -162,7 +196,7 @@ public class PartnerAdService {
       throw new ApiException(HttpStatus.CONFLICT, "Đơn này không còn chờ thanh toán");
     }
     sync.cancelByPartner(orderCode);
-    return AdMappers.toPayment(ownedPayment(userId, orderCode));
+    return withIssue(ownedPayment(userId, orderCode));
   }
 
   // ===== Mua gói =====

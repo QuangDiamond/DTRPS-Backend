@@ -4,6 +4,7 @@ import com.dtrps.common.PageResponse;
 import com.dtrps.modules.payment.dto.AdDtos;
 import com.dtrps.modules.payment.service.AdPaymentSyncService;
 import com.dtrps.modules.payment.service.AdminAdService;
+import com.dtrps.modules.payment.service.PaymentIssueService;
 import com.dtrps.security.CurrentUser;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -39,10 +40,13 @@ public class AdminAdController {
 
   private final AdminAdService adminService;
   private final AdPaymentSyncService sync;
+  private final PaymentIssueService issueService;
 
-  public AdminAdController(AdminAdService adminService, AdPaymentSyncService sync) {
+  public AdminAdController(
+      AdminAdService adminService, AdPaymentSyncService sync, PaymentIssueService issueService) {
     this.adminService = adminService;
     this.sync = sync;
+    this.issueService = issueService;
   }
 
   // ===== Bảng giá =====
@@ -107,7 +111,7 @@ public class AdminAdController {
     return adminService.payment(id);
   }
 
-  /** Hỏi lại PayOS và áp dụng kết quả; không có thao tác đánh dấu đã trả bằng tay. */
+  /** Hỏi lại PayOS và áp dụng kết quả. */
   @PostMapping("/payments/{id}/reconcile")
   public AdDtos.AdminPayment reconcile(@PathVariable Long id) {
     sync.reconcile(adminService.orderCodeOf(id));
@@ -120,6 +124,44 @@ public class AdminAdController {
       @PathVariable Long id,
       @Valid @RequestBody AdDtos.RefundRequest request) {
     return adminService.refund(CurrentUser.id(jwt), id, request.reason(), request.reference());
+  }
+
+  // ===== Sự cố thanh toán do đối tác báo =====
+
+  @GetMapping("/payment-issues")
+  public PageResponse<AdDtos.AdminPaymentIssue> paymentIssues(
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false)
+          @Pattern(
+              regexp = "^(OPEN|RESOLVED|REJECTED)$",
+              message = "Trạng thái phiếu không hợp lệ")
+          String status,
+      @RequestParam(defaultValue = "0") @Min(0) int page,
+      @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size) {
+    return issueService.list(keyword, status, PageRequest.of(page, size, newest("issueId")));
+  }
+
+  @PostMapping("/payment-issues/{id}/reconcile")
+  public AdDtos.AdminPaymentIssue reconcileIssue(@PathVariable Long id) {
+    return issueService.reconcile(id);
+  }
+
+  /** Chỉ dùng khi PayOS không ghi nhận nhưng sao kê ngân hàng có tiền; có ghi audit log. */
+  @PostMapping("/payment-issues/{id}/activate")
+  public AdDtos.AdminPaymentIssue activateIssue(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable Long id,
+      @Valid @RequestBody AdDtos.ManualActivateRequest request) {
+    return issueService.activate(
+        CurrentUser.id(jwt), id, request.bankReference(), request.reason());
+  }
+
+  @PostMapping("/payment-issues/{id}/reject")
+  public AdDtos.AdminPaymentIssue rejectIssue(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable Long id,
+      @Valid @RequestBody AdDtos.ReasonRequest request) {
+    return issueService.reject(CurrentUser.id(jwt), id, request.reason());
   }
 
   // ===== Gói đang chạy =====
