@@ -107,6 +107,12 @@ public class TravelPlan {
     )
     private List<String> categoryCodes = new ArrayList<>();
 
+    // Câu trả lời cá nhân hóa của riêng chuyến đi, độc lập với categoryCodes.
+    @JdbcTypeCode(SqlTypes.JSON)
+    @ColumnDefault("'[]'::jsonb")
+    @Column(name = "experience_preferences", columnDefinition = "jsonb", nullable = false)
+    private List<String> experiencePreferences = new ArrayList<>();
+
     @ColumnDefault("'BALANCED'")
     @Column(name = "travel_pace", nullable = false, length = 20)
     private String travelPace = "BALANCED";

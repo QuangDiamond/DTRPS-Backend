@@ -14,87 +14,112 @@ import java.util.List;
 
 public final class TravelPlanDtos {
 
-  private TravelPlanDtos() {}
+    private TravelPlanDtos() {}
 
-  /** Các trường chung của tạo và sửa kế hoạch, để service dùng một hàm gán dữ liệu. */
-  public interface PlanFields {
-    String title();
+    /** Các trường chung của tạo và sửa kế hoạch, để service dùng một hàm gán dữ liệu. */
+    public interface PlanFields {
+        String title();
 
-    String destination();
+        String destination();
 
-    LocalDate startDate();
+        LocalDate startDate();
 
-    LocalDate endDate();
+        LocalDate endDate();
 
-    BigDecimal budget();
+        BigDecimal budget();
 
-    String currency();
+        String currency();
 
-    Integer groupSize();
+        Integer groupSize();
 
-    String description();
+        String description();
 
-    List<String> categoryCodes();
+        List<String> categoryCodes();
 
-    String travelPace();
-  }
+        String travelPace();
 
-  public record CreateRequest(
-      @NotBlank(message = "Tên kế hoạch không được để trống") @Size(max = 255) String title,
-      @NotBlank(message = "Điểm đến không được để trống") @Size(max = 255) String destination,
-      @NotNull(message = "Ngày bắt đầu không được để trống") LocalDate startDate,
-      @NotNull(message = "Ngày kết thúc không được để trống") LocalDate endDate,
-      @DecimalMin("0.00") @Digits(integer = 13, fraction = 2) BigDecimal budget,
-      @Pattern(regexp = "[A-Za-z]{3}") String currency,
-      @Positive Integer groupSize,
-      String description,
+        List<String> experiencePreferences();
+    }
 
-      // Sở thích của chuyến: mã loại hình con trong place_categories,
-      // giống sở thích của người dùng (users/me/preferences)
-      @Size(max = 50) List<@NotBlank @Size(max = 50) String> categoryCodes,
-      @Pattern(regexp = "RELAXED|BALANCED|PACKED", message = "Nhịp độ không hợp lệ")
-          String travelPace)
-      implements PlanFields {}
+    public record CreateRequest(
+            @NotBlank(message = "Tên kế hoạch không được để trống") @Size(max = 255) String title,
+            @NotBlank(message = "Điểm đến không được để trống") @Size(max = 255) String destination,
+            @NotNull(message = "Ngày bắt đầu không được để trống") LocalDate startDate,
+            @NotNull(message = "Ngày kết thúc không được để trống") LocalDate endDate,
+            @DecimalMin("0.00") @Digits(integer = 13, fraction = 2) BigDecimal budget,
+            @Pattern(regexp = "[A-Za-z]{3}") String currency,
+            @Positive Integer groupSize,
+            String description,
 
-  /** Sửa toàn bộ kế hoạch (PUT): gửi đủ các trường như khi tạo. */
-  public record UpdateRequest(
-      @NotBlank(message = "Tên kế hoạch không được để trống") @Size(max = 255) String title,
-      @NotBlank(message = "Điểm đến không được để trống") @Size(max = 255) String destination,
-      @NotNull(message = "Ngày bắt đầu không được để trống") LocalDate startDate,
-      @NotNull(message = "Ngày kết thúc không được để trống") LocalDate endDate,
-      @DecimalMin("0.00") @Digits(integer = 13, fraction = 2) BigDecimal budget,
-      @Pattern(regexp = "[A-Za-z]{3}") String currency,
-      @Positive Integer groupSize,
-      String description,
-      @Size(max = 50) List<@NotBlank @Size(max = 50) String> categoryCodes,
-      @Pattern(regexp = "RELAXED|BALANCED|PACKED", message = "Nhịp độ không hợp lệ")
-          String travelPace)
-      implements PlanFields {}
+            // Sở thích của chuyến: mã loại hình con trong place_categories,
+            // giống sở thích của người dùng (users/me/preferences)
+            @Size(max = 50) List<@NotBlank @Size(max = 50) String> categoryCodes,
+            @Pattern(regexp = "RELAXED|BALANCED|PACKED", message = "Nhịp độ không hợp lệ")
+            String travelPace,
+            @Size(max = 22) List<@NotBlank @Size(max = 50) String> experiencePreferences)
+            implements PlanFields {
 
-  public record ChangeStatusRequest(
-      @NotBlank(message = "Trạng thái không được để trống")
-          @Pattern(
-              regexp = "DRAFT|PLANNED|IN_PROGRESS|COMPLETED|CANCELLED",
-              message = "Trạng thái không hợp lệ")
-          String status) {}
+        // Giữ tương thích các lời gọi constructor cũ (bao gồm unit test).
+        public CreateRequest(
+                String title, String destination, LocalDate startDate, LocalDate endDate,
+                BigDecimal budget, String currency, Integer groupSize, String description,
+                List<String> categoryCodes, String travelPace) {
+            this(title, destination, startDate, endDate, budget, currency, groupSize,
+                    description, categoryCodes, travelPace, null);
+        }
+    }
 
-  public record PlanResponse(
-      Long planId,
-      Long userId,
-      String title,
-      String destination,
-      LocalDate startDate,
-      LocalDate endDate,
-      BigDecimal budget,
-      String currency,
-      Integer groupSize,
-      String description,
-      List<String> categoryCodes,
-      String travelPace,
-      String status,
+    /** Sửa toàn bộ kế hoạch (PUT): gửi đủ các trường như khi tạo. */
+    public record UpdateRequest(
+            @NotBlank(message = "Tên kế hoạch không được để trống") @Size(max = 255) String title,
+            @NotBlank(message = "Điểm đến không được để trống") @Size(max = 255) String destination,
+            @NotNull(message = "Ngày bắt đầu không được để trống") LocalDate startDate,
+            @NotNull(message = "Ngày kết thúc không được để trống") LocalDate endDate,
+            @DecimalMin("0.00") @Digits(integer = 13, fraction = 2) BigDecimal budget,
+            @Pattern(regexp = "[A-Za-z]{3}") String currency,
+            @Positive Integer groupSize,
+            String description,
+            @Size(max = 50) List<@NotBlank @Size(max = 50) String> categoryCodes,
+            @Pattern(regexp = "RELAXED|BALANCED|PACKED", message = "Nhịp độ không hợp lệ")
+            String travelPace,
+            @Size(max = 22) List<@NotBlank @Size(max = 50) String> experiencePreferences)
+            implements PlanFields {
 
-      // Các trạng thái được phép chuyển tới, để client hiện đúng nút
-      List<String> allowedNextStatuses,
-      Instant createdAt,
-      Instant updatedAt) {}
+        // Giữ tương thích các lời gọi constructor cũ (bao gồm unit test).
+        public UpdateRequest(
+                String title, String destination, LocalDate startDate, LocalDate endDate,
+                BigDecimal budget, String currency, Integer groupSize, String description,
+                List<String> categoryCodes, String travelPace) {
+            this(title, destination, startDate, endDate, budget, currency, groupSize,
+                    description, categoryCodes, travelPace, null);
+        }
+    }
+
+    public record ChangeStatusRequest(
+            @NotBlank(message = "Trạng thái không được để trống")
+            @Pattern(
+                    regexp = "DRAFT|PLANNED|IN_PROGRESS|COMPLETED|CANCELLED",
+                    message = "Trạng thái không hợp lệ")
+            String status) {}
+
+    public record PlanResponse(
+            Long planId,
+            Long userId,
+            String title,
+            String destination,
+            LocalDate startDate,
+            LocalDate endDate,
+            BigDecimal budget,
+            String currency,
+            Integer groupSize,
+            String description,
+            List<String> categoryCodes,
+            String travelPace,
+            String status,
+
+            // Các trạng thái được phép chuyển tới, để client hiện đúng nút
+            List<String> allowedNextStatuses,
+            Instant createdAt,
+            Instant updatedAt,
+            List<String> experiencePreferences) {}
 }
