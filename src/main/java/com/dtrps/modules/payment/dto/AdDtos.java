@@ -1,5 +1,6 @@
 package com.dtrps.modules.payment.dto;
 
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -90,22 +91,35 @@ public final class AdDtos {
 
   // ===== Admin =====
 
+  /**
+   * Các trường số dùng BigDecimal: nếu khai báo Integer / Long, Jackson tự cắt 1.1 thành 1 mà không
+   * báo lỗi.
+   */
   public record PackageRequest(
-      @NotBlank(message = "Vui lòng nhập tên gói") @Size(max = 150) String name,
-      @Size(max = 2000) String description,
+      @NotBlank(message = "Vui lòng nhập tên gói")
+          @Size(max = 150, message = "Tên gói tối đa 150 ký tự")
+          String name,
+      @Size(max = 2000, message = "Mô tả tối đa 2000 ký tự") String description,
       @NotNull(message = "Vui lòng nhập giá")
+          @Digits(integer = 10, fraction = 0, message = "Giá phải là số nguyên")
           @Min(value = 1000, message = "Giá tối thiểu 1.000đ")
-          @Max(value = 1000000000, message = "Giá quá lớn")
-          Long price,
+          @Max(value = 1000000000, message = "Giá tối đa 1.000.000.000đ")
+          BigDecimal price,
       @NotNull(message = "Vui lòng nhập số ngày")
-          @Min(value = 1, message = "Số ngày phải lớn hơn 0")
-          @Max(value = 3650, message = "Số ngày quá lớn")
-          Integer durationDays,
+          @Digits(integer = 4, fraction = 0, message = "Số ngày phải là số nguyên")
+          @Min(value = 1, message = "Số ngày phải từ 1 đến 3650")
+          @Max(value = 3650, message = "Số ngày phải từ 1 đến 3650")
+          BigDecimal durationDays,
       @NotNull(message = "Vui lòng nhập số địa điểm")
-          @Min(value = 1, message = "Số địa điểm phải lớn hơn 0")
-          @Max(value = 100, message = "Số địa điểm quá lớn")
-          Integer maxPlaces,
-      @Min(0) Integer sortOrder) {}
+          @Digits(integer = 3, fraction = 0, message = "Số địa điểm phải là số nguyên")
+          @Min(value = 1, message = "Số địa điểm phải từ 1 đến 100")
+          @Max(value = 100, message = "Số địa điểm phải từ 1 đến 100")
+          BigDecimal maxPlaces,
+      @NotNull(message = "Vui lòng nhập thứ tự")
+          @Digits(integer = 4, fraction = 0, message = "Thứ tự phải là số nguyên")
+          @Min(value = 1, message = "Thứ tự phải từ 1 đến 9999")
+          @Max(value = 9999, message = "Thứ tự phải từ 1 đến 9999")
+          BigDecimal sortOrder) {}
 
   public record PackageStatusRequest(
       @NotBlank
