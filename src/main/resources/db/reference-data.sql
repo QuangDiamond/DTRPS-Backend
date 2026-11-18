@@ -106,13 +106,24 @@ ON CONFLICT DO NOTHING;
 
 
 -- 5. Special Needs
+-- Bỏ "Khác", "Hạn chế đồ ăn", "Dị ứng thực phẩm": xóa tham chiếu đã chọn trước rồi mới xóa chính
+-- nó (an toàn với DB đã có dữ liệu)
+DELETE FROM preference_special_needs
+WHERE special_need_id IN (
+    SELECT special_need_id FROM special_needs WHERE code IN ('other', 'diet', 'allergy')
+);
+
+DELETE FROM special_needs WHERE code IN ('other', 'diet', 'allergy');
+
 INSERT INTO special_needs (code, name) VALUES
     ('vegetarian', 'Ăn chay'),
-    ('diet', 'Hạn chế đồ ăn'),
     ('kids', 'Phù hợp trẻ em'),
     ('elderly', 'Phù hợp người lớn tuổi'),
     ('pets', 'Thân thiện với thú cưng'),
-    ('other', 'Khác')
+    ('disability', 'Người khuyết tật'),
+    ('largeGroup', 'Nhóm đông người'),
+    ('limitedMobility', 'Hạn chế vận động mạnh'),
+    ('quietSpace', 'Ưu tiên không gian yên tĩnh')
 ON CONFLICT DO NOTHING;
 
 
