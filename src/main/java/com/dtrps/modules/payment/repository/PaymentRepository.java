@@ -4,6 +4,7 @@ import com.dtrps.modules.payment.entity.Payment;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -65,4 +66,12 @@ public interface PaymentRepository
   long countByStatus(String status);
 
   long countByNeedsReviewTrue();
+
+  /** Đơn kích hoạt tay của các gói, mới nhất trước */
+  @EntityGraph(attributePaths = "subscription")
+  @Query(
+      "select p from Payment p where p.subscription.subscriptionId in :ids"
+          + " and p.gatewayStatus = :manual order by p.paymentId desc")
+  List<Payment> findManualBySubscriptionIds(
+      @Param("ids") Collection<Long> ids, @Param("manual") String manual);
 }

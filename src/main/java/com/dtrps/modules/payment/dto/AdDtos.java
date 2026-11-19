@@ -214,7 +214,19 @@ public final class AdDtos {
       Instant startDate,
       Instant endDate,
       long daysLeft,
-      String cancelReason) {}
+      String cancelReason,
+      /* Có khi gói được admin kích hoạt tay từ phiếu sự cố (PayOS không ghi nhận); null nếu không */
+      ManualActivation manualActivation) {}
+
+  /** Lần kích hoạt tay gần nhất của một gói: đơn, mã giao dịch ngân hàng, phiếu sự cố đã xử lý. */
+  public record ManualActivation(
+      Long paymentId,
+      String orderCode,
+      String bankReference,
+      Long issueId,
+      String reason,
+      String handledBy,
+      Instant activatedAt) {}
 
   public record ReasonRequest(
       @NotBlank(message = "Vui lòng nhập lý do") @Size(max = 1000) String reason) {}

@@ -10,6 +10,7 @@ import com.dtrps.modules.notification.service.NotificationService;
 import com.dtrps.modules.payment.dto.AdDtos;
 import com.dtrps.modules.payment.entity.AdPackage;
 import com.dtrps.modules.payment.entity.Payment;
+import com.dtrps.modules.payment.entity.PaymentIssue;
 import com.dtrps.modules.payment.entity.Subscription;
 import com.dtrps.modules.payment.repository.AdPackageRepository;
 import com.dtrps.modules.payment.repository.PaymentIssueRepository;
@@ -43,6 +44,8 @@ public class AdminAdService {
   private static final String SUSPENDED = "SUSPENDED";
   private static final String PUBLISHED = "PUBLISHED";
   private static final String PARTNER_ADS = "/partner/ads";
+  /** gatewayStatus của đơn admin kích hoạt tay từ phiếu sự cố; cũng là giá trị lọc gói */
+  private static final String MANUAL = "MANUAL";
 
   private final AdPackageRepository packages;
   private final PaymentRepository payments;
@@ -292,7 +295,20 @@ public class AdminAdService {
               (root, query, cb) ->
                   cb.like(cb.lower(root.join("business").get("businessName")), like));
     }
-    if (hasText(status)) {
+    if (MANUAL.equals(status)) {
+      // Gói có đơn được admin kích hoạt tay (bất kể gói còn chạy hay đã kết thúc)
+      spec =
+          spec.and(
+              (root, query, cb) -> {
+                var sub = query.subquery(Long.class);
+                var payment = sub.from(Payment.class);
+                sub.select(payment.get("paymentId"))
+                    .where(
+                        cb.equal(payment.get("subscription"), root),
+                        cb.equal(payment.get("gatewayStatus"), MANUAL));
+                return cb.exists(sub);
+              });
+    } else if (hasText(status)) {
       spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
     }
     Page<Subscription> page = subscriptions.findAll(spec, pageable);
@@ -301,9 +317,51 @@ public class AdminAdService {
     if (!ids.isEmpty()) {
       advertisements.usedSlots(ids).forEach(row -> used.put((Long) row[0], (Long) row[1]));
     }
+    Map<Long, AdDtos.ManualActivation> manual = manualActivations(ids);
     Instant now = clock.instant();
     return PageResponse.from(
-        page.map(item -> toAdminSubscription(item, used.getOrDefault(item.getSubscriptionId(), 0L), now)));
+        page.map(
+            item ->
+                toAdminSubscription(
+                    item,
+                    used.getOrDefault(item.getSubscriptionId(), 0L),
+                    manual.get(item.getSubscriptionId()),
+                    now)));
+  }
+
+  /** Gói → lần kích hoạt tay gần nhất (đơn + phiếu sự cố đã xử lý), chỉ các gói có */
+  private Map<Long, AdDtos.ManualActivation> manualActivations(List<Long> subscriptionIds) {
+    Map<Long, AdDtos.ManualActivation> result = new HashMap<>();
+    if (subscriptionIds.isEmpty()) {
+      return result;
+    }
+    List<Payment> manualPayments = payments.findManualBySubscriptionIds(subscriptionIds, MANUAL);
+    if (manualPayments.isEmpty()) {
+      return result;
+    }
+    Map<Long, PaymentIssue> issueByPayment = new HashMap<>();
+    issues
+        .findByPaymentPaymentIdInOrderByIssueIdDesc(
+            manualPayments.stream().map(Payment::getPaymentId).toList())
+        .stream()
+        .filter(issue -> "RESOLVED".equals(issue.getStatus()))
+        .forEach(issue -> issueByPayment.putIfAbsent(issue.getPayment().getPaymentId(), issue));
+    for (Payment payment : manualPayments) {
+      PaymentIssue issue = issueByPayment.get(payment.getPaymentId());
+      result.putIfAbsent(
+          payment.getSubscription().getSubscriptionId(),
+          new AdDtos.ManualActivation(
+              payment.getPaymentId(),
+              payment.getTransactionReference(),
+              payment.getBankReference(),
+              issue == null ? null : issue.getIssueId(),
+              issue == null ? null : issue.getResolutionNote(),
+              issue == null || issue.getHandledBy() == null
+                  ? null
+                  : issue.getHandledBy().getFullName(),
+              issue == null ? payment.getPaidAt() : issue.getHandledAt()));
+    }
+    return result;
   }
 
   @Transactional
@@ -328,7 +386,7 @@ public class AdminAdService {
   }
 
   private static AdDtos.AdminSubscription toAdminSubscription(
-      Subscription item, long used, Instant now) {
+      Subscription item, long used, AdDtos.ManualActivation manual, Instant now) {
     return new AdDtos.AdminSubscription(
         item.getSubscriptionId(),
         item.getBusiness().getBusinessId(),
@@ -341,7 +399,8 @@ public class AdminAdService {
         item.getStartDate(),
         item.getEndDate(),
         ACTIVE.equals(item.getStatus()) ? AdMappers.daysLeft(item, now) : 0,
-        item.getCancelReason());
+        item.getCancelReason(),
+        manual);
   }
 
   // ===== Quảng cáo =====

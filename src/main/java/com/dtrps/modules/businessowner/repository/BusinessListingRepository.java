@@ -52,4 +52,7 @@ public interface BusinessListingRepository
   boolean existsByPlacePlaceId(Long placeId);
 
   long countByStatus(String status);
+
+  /** Niêm yết ở trạng thái {@code status} mà địa điểm đang ở {@code placeStatus} */
+  long countByStatusAndPlaceStatus(String status, String placeStatus);
 }

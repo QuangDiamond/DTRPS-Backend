@@ -2,13 +2,17 @@ package com.dtrps.modules.notification.service;
 
 import com.dtrps.exception.ApiException;
 import com.dtrps.modules.notification.dto.Notice;
+import com.dtrps.modules.notification.dto.NotificationCategory;
 import com.dtrps.modules.notification.dto.NotificationPage;
 import com.dtrps.modules.notification.dto.NotificationResponse;
 import com.dtrps.modules.user.entity.Notification;
 import com.dtrps.modules.user.repository.NotificationRepository;
 import com.dtrps.modules.user.repository.UserRepository;
 import java.time.Clock;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -86,22 +90,62 @@ public class NotificationService {
 
   // ===== Reading =====
 
+  /**
+   * One page of the user's notifications, newest first; {@code category} null = every tab. A tab
+   * is resolved to the types the user actually has, so new types need no query change.
+   */
   @Transactional(readOnly = true)
-  public NotificationPage list(Long userId, boolean unreadOnly, int page, int size) {
+  public NotificationPage list(
+      Long userId, boolean unreadOnly, NotificationCategory category, int page, int size) {
     PageRequest request = PageRequest.of(page, size);
-    Page<Notification> found =
-        unreadOnly
-            ? notificationRepository
-                .findByUserUserIdAndIsReadFalseOrderByCreatedAtDescNotificationIdDesc(
-                    userId, request)
-            : notificationRepository.findByUserUserIdOrderByCreatedAtDescNotificationIdDesc(
-                userId, request);
+    List<Object[]> typeCounts = notificationRepository.countTypes(userId);
+    Page<Notification> found;
+    if (category == null) {
+      found =
+          unreadOnly
+              ? notificationRepository
+                  .findByUserUserIdAndIsReadFalseOrderByCreatedAtDescNotificationIdDesc(
+                      userId, request)
+              : notificationRepository.findByUserUserIdOrderByCreatedAtDescNotificationIdDesc(
+                  userId, request);
+    } else {
+      List<String> types =
+          typeCounts.stream()
+              .map(row -> (String) row[0])
+              .filter(type -> NotificationCategory.of(type) == category)
+              .toList();
+      if (types.isEmpty()) {
+        found = Page.empty(request);
+      } else if (unreadOnly) {
+        found =
+            notificationRepository
+                .findByUserUserIdAndTypeInAndIsReadFalseOrderByCreatedAtDescNotificationIdDesc(
+                    userId, types, request);
+      } else {
+        found =
+            notificationRepository.findByUserUserIdAndTypeInOrderByCreatedAtDescNotificationIdDesc(
+                userId, types, request);
+      }
+    }
     return new NotificationPage(
         found.getContent().stream().map(NotificationService::toResponse).toList(),
         found.getTotalElements(),
         page,
         size,
-        notificationRepository.countByUserUserIdAndIsReadFalse(userId));
+        notificationRepository.countByUserUserIdAndIsReadFalse(userId),
+        unreadByCategory(typeCounts));
+  }
+
+  /** Tabs the user has notifications in, in tab order → unread count. */
+  private static Map<String, Long> unreadByCategory(List<Object[]> typeCounts) {
+    Map<NotificationCategory, Long> counts = new EnumMap<>(NotificationCategory.class);
+    for (Object[] row : typeCounts) {
+      long unread = row[1] == null ? 0 : ((Number) row[1]).longValue();
+      counts.merge(NotificationCategory.of((String) row[0]), unread, Long::sum);
+    }
+    Map<String, Long> result = new LinkedHashMap<>();
+    counts.forEach((category, unread) -> result.put(category.name(), unread));
+    return result;
   }
 
   @Transactional(readOnly = true)
@@ -156,6 +200,7 @@ public class NotificationService {
     return new NotificationResponse(
         notification.getNotificationId(),
         notification.getType(),
+        NotificationCategory.of(notification.getType()).name(),
         notification.getTitle(),
         notification.getMessage(),
         notification.getLink(),
