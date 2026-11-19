@@ -2,6 +2,7 @@ package com.dtrps.modules.payment.service;
 
 import com.dtrps.common.PageResponse;
 import com.dtrps.exception.ApiException;
+import com.dtrps.modules.admin.service.SystemSettingsService;
 import com.dtrps.modules.advertisement.entity.Advertisement;
 import com.dtrps.modules.advertisement.repository.AdvertisementRepository;
 import com.dtrps.modules.businessowner.entity.BusinessListing;
@@ -53,7 +54,6 @@ public class PartnerAdService {
   private static final String SUSPENDED = "SUSPENDED";
   private static final String APPROVED = "APPROVED";
   private static final String RESULT_PATH = "/partner/ads/payment-result";
-  private static final Duration DEFAULT_LINK_TTL = Duration.ofMinutes(15);
 
   private final AdPackageRepository packages;
   private final SubscriptionRepository subscriptions;
@@ -70,6 +70,8 @@ public class PartnerAdService {
   private final TransactionTemplate transaction;
   private final Clock clock;
 
+  private final SystemSettingsService settings;
+
   public PartnerAdService(
       AdPackageRepository packages,
       SubscriptionRepository subscriptions,
@@ -84,7 +86,9 @@ public class PartnerAdService {
       AdPaymentSyncService sync,
       PayOsProperties properties,
       PlatformTransactionManager transactionManager,
+      SystemSettingsService settings,
       Clock clock) {
+    this.settings = settings;
     this.packages = packages;
     this.subscriptions = subscriptions;
     this.windows = windows;
@@ -215,7 +219,8 @@ public class PartnerAdService {
     try {
       payment = transaction.execute(status -> prepare.get());
     } catch (DataIntegrityViolationException e) {
-      throw new ApiException(HttpStatus.CONFLICT, "Đơn đang được tạo, vui lòng thử lại sau giây lát");
+      throw new ApiException(
+          HttpStatus.CONFLICT, "Đơn đang được tạo, vui lòng thử lại sau giây lát");
     }
     if (payment.getCheckoutUrl() != null) {
       return new AdDtos.CheckoutResponse(
@@ -283,7 +288,8 @@ public class PartnerAdService {
       AdPackage pendingPackage = reusable.get().getSubscription().getAdPackage();
       if (pendingPackage == null || !packageId.equals(pendingPackage.getPackageId())) {
         throw new ApiException(
-            HttpStatus.CONFLICT, "Bạn đang có đơn chờ thanh toán, hãy huỷ đơn đó trước khi đổi gói");
+            HttpStatus.CONFLICT,
+            "Bạn đang có đơn chờ thanh toán, hãy huỷ đơn đó trước khi đổi gói");
       }
       return reusable.get();
     }
@@ -361,8 +367,8 @@ public class PartnerAdService {
     payment.setTransactionReference(String.valueOf(payments.nextOrderCode()));
     payment.setPaymentType(type);
     payment.setRenewalWindow(window);
-    payment.setLinkExpiresAt(
-        now.plus(properties.linkTtl() == null ? DEFAULT_LINK_TTL : properties.linkTtl()));
+    // Thời hạn link do admin chỉnh ở Cài đặt hệ thống
+    payment.setLinkExpiresAt(now.plus(settings.paymentLinkTtl()));
     return payments.saveAndFlush(payment);
   }
 
@@ -480,7 +486,8 @@ public class PartnerAdService {
 
   private Map<Long, Advertisement> currentAds(Long subscriptionId) {
     return advertisements
-        .findBySubscriptionSubscriptionIdAndStatusIn(subscriptionId, AdSubscriptionOps.SLOT_STATUSES)
+        .findBySubscriptionSubscriptionIdAndStatusIn(
+            subscriptionId, AdSubscriptionOps.SLOT_STATUSES)
         .stream()
         .collect(Collectors.toMap(ad -> ad.getListing().getListingId(), Function.identity()));
   }
@@ -508,8 +515,7 @@ public class PartnerAdService {
         .findByPaymentGatewayAndTransactionReference(
             AdPaymentResultService.GATEWAY, String.valueOf(orderCode))
         .filter(
-            payment ->
-                payment.getSubscription().getBusiness().getUser().getUserId().equals(userId))
+            payment -> payment.getSubscription().getBusiness().getUser().getUserId().equals(userId))
         .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy đơn thanh toán"));
   }
 

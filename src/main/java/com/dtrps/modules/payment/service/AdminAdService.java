@@ -18,7 +18,6 @@ import com.dtrps.modules.payment.repository.PaymentRepository;
 import com.dtrps.modules.payment.repository.SubscriptionRepository;
 import com.dtrps.modules.user.repository.UserRepository;
 import jakarta.persistence.criteria.JoinType;
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -44,6 +43,7 @@ public class AdminAdService {
   private static final String SUSPENDED = "SUSPENDED";
   private static final String PUBLISHED = "PUBLISHED";
   private static final String PARTNER_ADS = "/partner/ads";
+
   /** gatewayStatus của đơn admin kích hoạt tay từ phiếu sự cố; cũng là giá trị lọc gói */
   private static final String MANUAL = "MANUAL";
 
@@ -408,8 +408,7 @@ public class AdminAdService {
   @Transactional(readOnly = true)
   public PageResponse<AdDtos.AdminAdvertisement> advertisements(
       String keyword, String status, Pageable pageable) {
-    Specification<Advertisement> spec =
-        (root, query, cb) -> cb.isNotNull(root.get("subscription"));
+    Specification<Advertisement> spec = (root, query, cb) -> cb.isNotNull(root.get("subscription"));
     if (hasText(keyword)) {
       String like = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
       spec =
@@ -444,7 +443,8 @@ public class AdminAdService {
     boolean hiding = SUSPENDED.equals(status);
     ad.setStatus(status);
     ad.setSuspendReason(hiding ? reason.trim() : null);
-    auditService.record(adminId, hiding ? "AD_SUSPENDED" : "AD_RESTORED", "advertisements", id, reason.trim());
+    auditService.record(
+        adminId, hiding ? "AD_SUSPENDED" : "AD_RESTORED", "advertisements", id, reason.trim());
     String place = ad.getListing().getPlace().getName();
     notifications.notifyUser(
         ad.getListing().getBusiness().getUser().getUserId(),

@@ -1,6 +1,7 @@
 package com.dtrps.modules.payment.controller;
 
 import com.dtrps.exception.ApiException;
+import com.dtrps.modules.admin.service.SystemSettingsService;
 import com.dtrps.modules.payment.service.AdPaymentResultService;
 import com.dtrps.modules.payment.service.PayOsGateway;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -18,9 +19,13 @@ public class PayOsWebhookController {
   private final PayOsGateway gateway;
   private final AdPaymentResultService results;
 
-  public PayOsWebhookController(PayOsGateway gateway, AdPaymentResultService results) {
+  private final SystemSettingsService settings;
+
+  public PayOsWebhookController(
+      PayOsGateway gateway, AdPaymentResultService results, SystemSettingsService settings) {
     this.gateway = gateway;
     this.results = results;
+    this.settings = settings;
   }
 
   @PostMapping("/api/payments/payos/webhook")
@@ -29,6 +34,8 @@ public class PayOsWebhookController {
     if (!gateway.verifyWebhook(data, body.path("signature").asText(null))) {
       throw new ApiException(HttpStatus.BAD_REQUEST, "Chữ ký không hợp lệ");
     }
+    // Trang Cài đặt hệ thống hiện lần cuối PayOS gọi về (để biết webhook đã đăng ký đúng)
+    settings.markPayOsWebhook();
     if (PAID_CODE.equals(data.path("code").asText())) {
       results.apply(
           data.path("orderCode").asLong(),

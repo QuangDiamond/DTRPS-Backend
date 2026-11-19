@@ -83,6 +83,11 @@ public class NotificationService {
     afterCommit(() -> hub.sendToAdmins(notice.toEvent(null), null));
   }
 
+  /** Refresh-only event for every signed-in tab (nothing saved), e.g. the site banner changed. */
+  public void refreshEveryone(Notice notice) {
+    afterCommit(() -> hub.sendToAll(notice.toEvent(null)));
+  }
+
   /** Refresh-only event for one user's tabs (nothing saved). */
   public void refreshUser(Long userId, Notice notice) {
     afterCommit(() -> hub.sendToUser(userId, notice.toEvent(null)));
@@ -91,8 +96,8 @@ public class NotificationService {
   // ===== Reading =====
 
   /**
-   * One page of the user's notifications, newest first; {@code category} null = every tab. A tab
-   * is resolved to the types the user actually has, so new types need no query change.
+   * One page of the user's notifications, newest first; {@code category} null = every tab. A tab is
+   * resolved to the types the user actually has, so new types need no query change.
    */
   @Transactional(readOnly = true)
   public NotificationPage list(

@@ -132,9 +132,7 @@ public class AdminAdController {
   public PageResponse<AdDtos.AdminPaymentIssue> paymentIssues(
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false)
-          @Pattern(
-              regexp = "^(OPEN|RESOLVED|REJECTED)$",
-              message = "Trạng thái phiếu không hợp lệ")
+          @Pattern(regexp = "^(OPEN|RESOLVED|REJECTED)$", message = "Trạng thái phiếu không hợp lệ")
           String status,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size) {
@@ -210,8 +208,7 @@ public class AdminAdController {
       @AuthenticationPrincipal Jwt jwt,
       @PathVariable Long id,
       @Valid @RequestBody AdDtos.AdStatusRequest request) {
-    return adminService.changeAdStatus(
-        CurrentUser.id(jwt), id, request.status(), request.reason());
+    return adminService.changeAdStatus(CurrentUser.id(jwt), id, request.status(), request.reason());
   }
 
   private static Sort newest(String idField) {

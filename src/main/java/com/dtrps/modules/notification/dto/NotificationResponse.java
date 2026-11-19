@@ -3,8 +3,8 @@ package com.dtrps.modules.notification.dto;
 import java.time.Instant;
 
 /**
- * One saved notification. {@code link} is the page to open when it is clicked; {@code category}
- * is its bell tab (see {@link NotificationCategory}).
+ * One saved notification. {@code link} is the page to open when it is clicked; {@code category} is
+ * its bell tab (see {@link NotificationCategory}).
  */
 public record NotificationResponse(
     Long id,

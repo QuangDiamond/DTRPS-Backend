@@ -70,7 +70,9 @@ public final class AdDtos {
       @Size(max = 1000, message = "Ghi chú tối đa 1000 ký tự") String note,
       @NotBlank(message = "Vui lòng tải lên ảnh biên lai")
           @Size(max = 1000, message = "Đường dẫn biên lai quá dài")
-          @Pattern(regexp = "^https://res\\.cloudinary\\.com/.+", message = "Ảnh biên lai không hợp lệ")
+          @Pattern(
+              regexp = "^https://res\\.cloudinary\\.com/.+",
+              message = "Ảnh biên lai không hợp lệ")
           String receiptUrl) {}
 
   /** {@code renewable}: đang trong 7 ngày cuối và cửa sổ gia hạn đang mở */
@@ -145,8 +147,7 @@ public final class AdDtos {
           BigDecimal sortOrder) {}
 
   public record PackageStatusRequest(
-      @NotBlank
-          @Pattern(regexp = "^(ACTIVE|INACTIVE)$", message = "Trạng thái gói không hợp lệ")
+      @NotBlank @Pattern(regexp = "^(ACTIVE|INACTIVE)$", message = "Trạng thái gói không hợp lệ")
           String status) {}
 
   public record PaymentStats(
@@ -245,7 +246,9 @@ public final class AdDtos {
 
   public record AdStatusRequest(
       @NotBlank
-          @Pattern(regexp = "^(PUBLISHED|SUSPENDED)$", message = "Trạng thái quảng cáo không hợp lệ")
+          @Pattern(
+              regexp = "^(PUBLISHED|SUSPENDED)$",
+              message = "Trạng thái quảng cáo không hợp lệ")
           String status,
       @NotBlank(message = "Vui lòng nhập lý do") @Size(max = 1000) String reason) {}
 }

@@ -110,6 +110,7 @@ public class SecurityConfig {
                                         .requestMatchers(
                                                 HttpMethod.GET,
                                                 "/api/featured-places",
+                                                "/api/site-info",
                                                 "/api/reference/**",
                                                 "/api/places",
                                                 "/api/places/{id}",

@@ -5,9 +5,9 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Tab of the notification bell. The only place that says which notification type belongs where:
- * a new type joins a tab by its prefix, and a type no tab claims lands in OTHER, so it is never
- * lost. Order matters — the first tab that matches wins (TRIP_FEEDBACK_* is a review, not a trip).
+ * Tab of the notification bell. The only place that says which notification type belongs where: a
+ * new type joins a tab by its prefix, and a type no tab claims lands in OTHER, so it is never lost.
+ * Order matters — the first tab that matches wins (TRIP_FEEDBACK_* is a review, not a trip).
  */
 public enum NotificationCategory {
   REVIEW(List.of("TRIP_FEEDBACK_"), List.of("REVIEW")),
