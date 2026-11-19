@@ -4,7 +4,8 @@ import java.util.Map;
 
 /**
  * Catalogue counters; {@code paused} covers PAUSED and MAINTENANCE, {@code byGroup} is by group
- * code.
+ * code. Chưa công khai = {@code pendingApproval} (địa điểm đối tác chờ duyệt niêm yết) + {@code
+ * hidden} (mọi địa điểm không hiển thị khác: tạm ngưng, bảo trì, nháp của admin…).
  */
 public record AdminPlaceStats(
     long total,
@@ -14,4 +15,6 @@ public record AdminPlaceStats(
     long partner,
     long admin,
     long newThisMonth,
-    Map<String, Long> byGroup) {}
+    Map<String, Long> byGroup,
+    long pendingApproval,
+    long hidden) {}

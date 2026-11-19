@@ -194,15 +194,20 @@ public class AdminPlaceService {
     for (Object[] row : placeRepository.countByGroup()) {
       byGroup.put((String) row[0], ((Number) row[1]).longValue());
     }
+    long active = placeRepository.countByStatus("ACTIVE");
+    // Chờ duyệt = địa điểm đối tác chưa từng công khai, niêm yết đang chờ admin duyệt
+    long pendingApproval = listingRepository.countByStatusAndPlaceStatus("PENDING", "DRAFT");
     return new AdminPlaceStats(
         total,
-        placeRepository.countByStatus("ACTIVE"),
+        active,
         placeRepository.countByStatus("DRAFT"),
         placeRepository.countByStatus("PAUSED") + placeRepository.countByStatus("MAINTENANCE"),
         partner,
         total - partner,
         placeRepository.countByCreatedAtGreaterThanEqual(monthStart),
-        byGroup);
+        byGroup,
+        pendingApproval,
+        Math.max(0, total - active - pendingApproval));
   }
 
   // ===== Helpers =====
