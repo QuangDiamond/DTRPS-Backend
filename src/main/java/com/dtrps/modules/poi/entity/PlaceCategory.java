@@ -48,4 +48,9 @@ public class PlaceCategory {
   @ColumnDefault("'ACTIVE'")
   @Column(name = "status", nullable = false, length = 30)
   private String status = "ACTIVE";
+
+  /** Used by the weather-impact feature (UC-045) to flag activities exposed to bad weather. */
+  @ColumnDefault("false")
+  @Column(name = "is_outdoor")
+  private Boolean isOutdoor = false;
 }

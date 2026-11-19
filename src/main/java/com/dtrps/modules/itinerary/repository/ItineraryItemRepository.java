@@ -2,6 +2,7 @@
 package com.dtrps.modules.itinerary.repository;
 
 import com.dtrps.modules.itinerary.entity.ItineraryItem;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -52,5 +53,19 @@ public interface ItineraryItemRepository
       """)
     long countActivityProgressForItem(
             @Param("itemId") Long itemId
+    );
+
+    // Các địa điểm thuộc chuyến đi đang diễn ra hoặc bắt đầu trong khoảng [today, limit] — phạm
+    // vi cập nhật của WeatherRefreshJob (chỉ lịch trình ACTIVE mới tính).
+    @Query("""
+      SELECT DISTINCT i.place.placeId
+      FROM ItineraryItem i
+      WHERE i.day.itinerary.status = 'ACTIVE'
+        AND (i.day.itinerary.plan.status = 'IN_PROGRESS'
+             OR i.day.itinerary.plan.startDate BETWEEN :today AND :limit)
+      """)
+    List<Long> findPlaceIdsForWeatherRefresh(
+            @Param("today") LocalDate today,
+            @Param("limit") LocalDate limit
     );
 }

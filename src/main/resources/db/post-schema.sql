@@ -93,6 +93,40 @@ LEFT JOIN itinerary_items i ON i.day_id = d.day_id
 GROUP BY d.day_id, d.itinerary_id, d.day_number, tp.start_date
 @@
 
+-- Đánh dấu các loại hình ngoài trời cho tính năng cảnh báo thời tiết (UC-045). "beach" không có
+-- trong place_categories (chỉ có ở bảng interests riêng) nên không đưa vào đây.
+UPDATE place_categories
+SET is_outdoor = TRUE
+WHERE code IN
+    ('park', 'scenicSpot', 'amusementPark', 'checkinSpot', 'craftVillage', 'nightMarket', 'heritage')
+@@
+
+-- WeatherForecast trước đây là 1 dòng/ngày (unique place_id+forecast_date); giờ đổi thành 1
+-- dòng/giờ (unique place_id+forecast_date+forecast_time, xem entity). ddl-auto=update không tự
+-- xóa constraint cũ nên phải xóa tay, nếu không insert dòng thứ 2 trong cùng 1 ngày sẽ vi phạm
+-- unique cũ (lỗi "duplicate key value violates unique constraint uq_weather_place_date").
+ALTER TABLE weather_forecasts DROP CONSTRAINT IF EXISTS uq_weather_place_date
+@@
+
+-- Dự báo giờ gộp thành dự báo ngày (GBR-47/49). MAX(weather_code) lấy mã lớn nhất trong ngày làm
+-- "điều kiện xấu nhất của ngày" vì mã WMO lớn hơn nhìn chung tương ứng hiện tượng nặng hơn (giông
+-- 95-99 > mưa 61-67 > mây 1-3 > quang 0) — đây là cách đơn giản hóa có chủ đích, không tuyệt đối
+-- chính xác (vd. sương mù 45/48 nhẹ nhưng mã không phải nhỏ nhất); đủ dùng để hiển thị icon ngày.
+CREATE OR REPLACE VIEW weather_daily_summary AS
+SELECT
+    place_id,
+    forecast_date,
+    MAX(temperature) AS temperature_max,
+    MIN(temperature) AS temperature_min,
+    MAX(precipitation_probability) AS precipitation_probability_max,
+    COALESCE(SUM(precipitation), 0) AS precipitation_sum,
+    MAX(wind_speed) AS wind_speed_max,
+    MAX(weather_code) AS weather_code,
+    MAX(fetched_at) AS fetched_at
+FROM weather_forecasts
+GROUP BY place_id, forecast_date
+@@
+
 CREATE OR REPLACE VIEW itinerary_cost_summary AS
 SELECT
     it.itinerary_id,

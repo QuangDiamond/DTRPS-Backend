@@ -104,3 +104,13 @@ app:
     api-key: ${OPENAI_API_KEY:}
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
     embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+  # Weather forecast (Open-Meteo, no key needed) + "mưa to/giông" thresholds for weather-impact
+  # warnings (UC-045, GBR-48).
+  weather:
+    base-url: ${WEATHER_BASE_URL:https://api.open-meteo.com}
+    cache-ttl-minutes: ${WEATHER_CACHE_TTL_MINUTES:60}
+    heavy-rain-probability: ${WEATHER_HEAVY_RAIN_PROBABILITY:70}
+    heavy-rain-mm-per-hour: ${WEATHER_HEAVY_RAIN_MM_PER_HOUR:7.6}
+    storm-weather-codes: ${WEATHER_STORM_CODES:65,67,82,95,96,99}
+    # Background job runs on the server only: every local run shares the same database
+    jobs-enabled: ${WEATHER_JOBS_ENABLED:false}
