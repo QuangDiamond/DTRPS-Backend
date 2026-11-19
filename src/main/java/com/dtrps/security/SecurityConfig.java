@@ -113,7 +113,8 @@ public class SecurityConfig {
                                                 "/api/reference/**",
                                                 "/api/places",
                                                 "/api/places/{id}",
-                                                "/api/places/{id}/reviews")
+                                                "/api/places/{id}/reviews",
+                                                "/api/weather")
                                         .permitAll()
 
                                         .requestMatchers("/error")

@@ -7,6 +7,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -14,28 +15,36 @@ import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Check;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
 
+/**
+ * One row per (place, date, hour) — hourly granularity only. Daily summaries (GBR-47 display,
+ * GBR-49 cache check) are derived from this via the {@code weather_daily_summary} view
+ * (post-schema.sql), not stored separately, so the two can never drift apart.
+ *
+ * <p>Refreshing a place's forecast deletes all its rows and re-inserts a fresh batch (see
+ * WeatherService) rather than updating in place, so {@code fetchedAt} is reliably "when this
+ * place's cache was last refreshed" for every row.
+ */
 @Entity
 @Table(
     name = "weather_forecasts",
+    indexes = {@Index(name = "idx_weather_forecasts_place", columnList = "place_id")},
     uniqueConstraints = {
       @UniqueConstraint(
-          name = "uq_weather_place_date",
-          columnNames = {"place_id", "forecast_date"})
+          name = "uq_weather_place_date_time",
+          columnNames = {"place_id", "forecast_date", "forecast_time"})
     })
 @Check(
-    name = "chk_precipitation_probability",
+    name = "chk_weather_precipitation_probability",
     constraints =
-        "(((precipitation_probability IS NULL) OR ((precipitation_probability >= (0)::numeric) AND (precipitation_probability <= (100)::numeric))))")
-@Check(
-    name = "chk_weather_temperature",
-    constraints =
-        "(((temperature_min IS NULL) OR (temperature_max IS NULL) OR (temperature_min <= temperature_max)))")
+        "(((precipitation_probability IS NULL) OR ((precipitation_probability >= 0) AND"
+            + " (precipitation_probability <= 100))))")
 @Getter
 @Setter
 public class WeatherForecast {
@@ -51,20 +60,28 @@ public class WeatherForecast {
   @Column(name = "forecast_date", nullable = false)
   private LocalDate forecastDate;
 
-  @Column(name = "temperature_min", precision = 5, scale = 2)
-  private BigDecimal temperatureMin;
+  @Column(name = "forecast_time", nullable = false)
+  private LocalTime forecastTime;
 
-  @Column(name = "temperature_max", precision = 5, scale = 2)
-  private BigDecimal temperatureMax;
+  @Column(name = "temperature", precision = 5, scale = 2)
+  private BigDecimal temperature;
 
-  @Column(name = "weather_condition", length = 100)
-  private String weatherCondition;
+  /** WMO weather code from Open-Meteo (0 = clear ... 99 = severe thunderstorm). */
+  @Column(name = "weather_code")
+  private Integer weatherCode;
 
-  @Column(name = "precipitation_probability", precision = 5, scale = 2)
-  private BigDecimal precipitationProbability;
+  @Column(name = "precipitation_probability")
+  private Integer precipitationProbability;
 
-  @Column(name = "source", length = 100)
-  private String source;
+  @Column(name = "precipitation", precision = 6, scale = 2)
+  private BigDecimal precipitation;
+
+  @Column(name = "wind_speed", precision = 6, scale = 2)
+  private BigDecimal windSpeed;
+
+  @ColumnDefault("'open-meteo'")
+  @Column(name = "source", length = 50)
+  private String source = "open-meteo";
 
   @CreationTimestamp
   @ColumnDefault("now()")
