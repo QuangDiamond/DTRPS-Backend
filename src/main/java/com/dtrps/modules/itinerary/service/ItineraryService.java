@@ -116,8 +116,10 @@ public class ItineraryService {
 
         // Lên lịch trong bộ nhớ trước:
         // lỗi không làm thay đổi ACTIVE hiện tại.
-        List<List<ItinerarySchedulingService.Visit>> schedule =
+        // Luôn xếp đủ mọi địa điểm; chỗ chưa hợp lý được trả về dưới dạng cảnh báo.
+        ItinerarySchedulingService.Schedule arranged =
                 scheduler.arrange(plan, chosen);
+        List<List<ItinerarySchedulingService.Visit>> schedule = arranged.days();
 
         // Bước 3: Xác định version_number tiếp theo
         int nextVersion = itineraryRepository
@@ -205,6 +207,7 @@ public class ItineraryService {
                 item.setEndTime(visit.end());
                 item.setTravelTimeMinutes(visit.travelMinutes());
                 item.setEstimatedCost(visit.estimatedCost());
+                item.setNotes(visit.note());
                 item.setStatus("PLANNED");
 
                 items.add(item);
@@ -213,7 +216,7 @@ public class ItineraryService {
 
         itemRepository.saveAllAndFlush(items);
 
-        return toResponse(itinerary, days);
+        return toResponse(itinerary, days, arranged.warnings());
     }
 
     /**
@@ -249,7 +252,7 @@ public class ItineraryService {
                                 itinerary.getItineraryId()
                         );
 
-        return toResponse(itinerary, days);
+        return toResponse(itinerary, days, List.of());
     }
 
     /**
@@ -313,7 +316,8 @@ public class ItineraryService {
      */
     private ItineraryDtos.ItineraryResponse toResponse(
             Itinerary itinerary,
-            List<ItineraryDay> days
+            List<ItineraryDay> days,
+            List<String> warnings
     ) {
 
         TravelPlan plan = itinerary.getPlan();
@@ -344,7 +348,8 @@ public class ItineraryService {
                 itinerary.getCurrency(),
                 plan.getStartDate(),
                 plan.getEndDate(),
-                dayResponses
+                dayResponses,
+                warnings
         );
     }
 }

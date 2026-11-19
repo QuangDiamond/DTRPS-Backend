@@ -34,6 +34,7 @@ public class RecommendationCandidateRepository {
             p.place_id,
             p.name,
             p.address,
+            p.description,
             p.latitude,
             p.longitude,
             main_cat.code AS primary_category_code,
@@ -58,6 +59,10 @@ public class RecommendationCandidateRepository {
 
             price.price_type,
             price.amount AS reference_price,
+
+            -- Nơi phải leo trèo / vận động mạnh (dựa trên mô tả), dùng cho người lớn tuổi, hạn chế vận động.
+            COALESCE(p.description, '') ~* '(leo núi|leo dốc|leo bậc|leo lên|leo khoảng|trekking|mạo hiểm|vượt thác|đu dây|leo bộ|bậc đá)'
+                AS strenuous,
 
             %s AS cosine_similarity
 
@@ -240,7 +245,9 @@ AND (
             rs.getBigDecimal("reference_price"),
             (Double) rs.getObject("latitude"),
             (Double) rs.getObject("longitude"),
-            (Double) rs.getObject("cosine_similarity")
+            (Double) rs.getObject("cosine_similarity"),
+            rs.getBoolean("strenuous"),
+            rs.getString("description")
         );
     }
 
@@ -281,6 +288,9 @@ AND (
         BigDecimal referencePrice,
         Double latitude,
         Double longitude,
-        Double cosineSimilarity
+        Double cosineSimilarity,
+        boolean strenuous,
+        /** Mô tả địa điểm – dùng để giải thích lý do gợi ý (không trả ra API). */
+        String description
     ) {}
 }

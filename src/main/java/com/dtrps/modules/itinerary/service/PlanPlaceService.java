@@ -22,7 +22,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
@@ -97,12 +96,8 @@ public class PlanPlaceService {
 
         List<Place> result = places.findAll(
                 spec,
-                PageRequest.of(
-                        0,
-                        100,
-                        Sort.by("placeId").ascending()
-                )
-        ).getContent();
+                Sort.by("placeId").ascending()
+        ); // không giới hạn số địa điểm phù hợp
 
         Set<Long> selectedIds = selected
                 .findByPlanPlanIdOrderByPriorityDescPlanPlaceIdAsc(planId)

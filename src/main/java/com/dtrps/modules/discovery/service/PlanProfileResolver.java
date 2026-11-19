@@ -5,7 +5,9 @@ import com.dtrps.exception.ApiException;
 import com.dtrps.modules.itinerary.entity.TravelPlan;
 import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
 import com.dtrps.modules.poi.entity.PlaceCategory;
+import com.dtrps.modules.poi.entity.SpecialNeed;
 import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
+import com.dtrps.modules.user.repository.PreferenceRepository;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -13,6 +15,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
@@ -33,12 +36,15 @@ public class PlanProfileResolver {
 
     private final TravelPlanRepository plans;
     private final PlaceCategoryRepository categories;
+    private final PreferenceRepository preferences;
 
     public PlanProfileResolver(
             TravelPlanRepository plans,
-            PlaceCategoryRepository categories) {
+            PlaceCategoryRepository categories,
+            PreferenceRepository preferences) {
         this.plans = plans;
         this.categories = categories;
+        this.preferences = preferences;
     }
 
     @Transactional(readOnly = true)
@@ -97,7 +103,18 @@ public class PlanProfileResolver {
             eligibleCodes,
             names,
             parseCompanion(plan.getDescription()),
-            lodgingCodes
+            lodgingCodes,
+            // Câu trả lời cá nhân hóa (mục đích/phong cách/trải nghiệm/kỷ niệm) đã lưu trên plan.
+            plan.getExperiencePreferences() == null
+                ? List.of()
+                : List.copyOf(plan.getExperiencePreferences()),
+            // Yêu cầu đặc biệt nằm trong hồ sơ "Sở thích du lịch" của người dùng.
+            preferences.findByUserUserId(userId)
+                .map(p -> p.getSpecialNeeds().stream()
+                    .map(SpecialNeed::getCode)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toUnmodifiableSet()))
+                .orElse(Set.of())
         );
     }
 
@@ -138,8 +155,26 @@ public class PlanProfileResolver {
         List<String> categoryCodes,
         List<String> categoryNames,
         String companionType,
-        List<String> lodgingCodes
+        List<String> lodgingCodes,
+        List<String> experienceCodes,
+        Set<String> specialNeeds
     ) {
+        /** Có trẻ nhỏ: yêu cầu đặc biệt "kids" hoặc đi theo hình thức "Gia đình" (form ghi chú: có trẻ nhỏ). */
+        public boolean withKids() {
+            if (specialNeeds.contains("kids")) {
+                return true;
+            }
+            String c = companionType == null ? "" : companionType.trim().toLowerCase();
+            return c.contains("gia đình") || c.contains("family") || c.contains("trẻ nhỏ");
+        }
+
+        /** Cần tránh nơi phải leo trèo, đi bộ nhiều. */
+        public boolean limitedMobility() {
+            return specialNeeds.contains("elderly")
+                || specialNeeds.contains("limitedMobility")
+                || specialNeeds.contains("disability");
+        }
+
         public BigDecimal budgetPerPerson() {
             if (totalBudget == null || groupSize <= 0) {
                 return null;

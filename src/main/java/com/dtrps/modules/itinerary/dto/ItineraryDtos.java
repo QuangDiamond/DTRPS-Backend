@@ -35,6 +35,8 @@ public final class ItineraryDtos {
             String currency,
             LocalDate startDate,
             LocalDate endDate,
-            List<DayResponse> days
+            List<DayResponse> days,
+            /** Cảnh báo khi tạo lịch trình (quá nhiều/ít địa điểm, ngoài giờ mở cửa…); rỗng nếu không có. */
+            List<String> warnings
     ) {}
 }

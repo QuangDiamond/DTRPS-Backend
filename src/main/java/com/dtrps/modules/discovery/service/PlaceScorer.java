@@ -18,12 +18,14 @@ public class PlaceScorer {
     private static final double CATEGORY_WEIGHT = 0.20;
     private static final double BUDGET_WEIGHT = 0.15;
 
-    // Ngưỡng thử nghiệm, điều chỉnh sau khi đánh giá.
+    // Cosine thực tế giữa câu nhu cầu và mô tả địa điểm nằm khoảng 0,28–0,55
+    // (text-embedding-3-small, văn bản tiếng Việt), nên quy đổi 0,25 → 0 và 0,60 → 1.
     private static final double COSINE_LOW = 0.25;
-    private static final double COSINE_HIGH = 0.85;
+    private static final double COSINE_HIGH = 0.60;
     private static final double NEUTRAL = 0.50;
 
-   
+    /** Nơi phải leo trèo/vận động mạnh khi người dùng là người lớn tuổi, hạn chế vận động, khuyết tật. */
+    private static final double MOBILITY_PENALTY = 0.80;
 
     public ScoredCandidate score(
             Candidate candidate,
@@ -56,13 +58,18 @@ public class PlaceScorer {
                 + CATEGORY_WEIGHT * category
                 + BUDGET_WEIGHT * budget;
 
+        double adjustment =
+            profile.limitedMobility() && candidate.strenuous() ? MOBILITY_PENALTY : 1.0;
+        total *= adjustment;
+
         return new ScoredCandidate(
             candidate,
             round4(clamp(total)),
             new ScoreBreakdown(
                 semantic == null ? null : round4(semantic),
                 round4(category),
-                round4(budget)
+                round4(budget),
+                adjustment
             ),
             degraded
         );
@@ -131,11 +138,12 @@ private double budgetScore(
         return NEUTRAL;
     }
 
-    // Chỉ đánh giá những loại giá phù hợp
-    // với danh sách địa điểm tham quan, ăn uống.
     String type = priceType.trim().toUpperCase(Locale.ROOT);
+    boolean roomNight = type.equals("ROOM_NIGHT");
 
-    if (!type.equals("TICKET")
+    // Vé/bữa ăn/đồ uống tính theo người; giá phòng quy về mỗi người (2 người/phòng).
+    if (!roomNight
+            && !type.equals("TICKET")
             && !type.equals("AVG_MEAL")
             && !type.equals("AVG_DRINK")) {
         return NEUTRAL;
@@ -154,6 +162,12 @@ private double budgetScore(
     // Giá 0 tạm được xem là miễn phí.
     if (price.signum() == 0) {
         return 1.0;
+    }
+
+    if (roomNight) {
+        int rooms = (profile.groupSize() + 1) / 2;
+        price = price.multiply(BigDecimal.valueOf(rooms))
+            .divide(BigDecimal.valueOf(profile.groupSize()), 8, RoundingMode.HALF_UP);
     }
 
     // Score = dailyBudget / (dailyBudget + price)
@@ -180,7 +194,9 @@ private double budgetScore(
     public record ScoreBreakdown(
         Double semanticScore,
         double categoryScore,
-        double budgetScore
+        double budgetScore,
+        /** Hệ số điều chỉnh theo yêu cầu đặc biệt (1 = không đổi, 0,8 = trừ 20%). */
+        double adjustment
     ) {}
 
     public record ScoredCandidate(

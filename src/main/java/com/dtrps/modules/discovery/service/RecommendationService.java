@@ -34,13 +34,13 @@ public class RecommendationService {
     private static final Logger log =
         LoggerFactory.getLogger(RecommendationService.class);
 
-    private static final double CANDIDATE_MULTIPLIER = 1.5;
 
     private final PlanProfileResolver profileResolver;
     private final PreferenceQueryBuilder queryBuilder;
     private final EmbeddingGateway embeddingGateway;
     private final RecommendationCandidateRepository candidates;
     private final PlaceScorer scorer;
+    private final RecommendationExplainer explainer;
     private final PlaceImageRepository images;
 
     public RecommendationService(
@@ -49,6 +49,7 @@ public class RecommendationService {
             EmbeddingGateway embeddingGateway,
             RecommendationCandidateRepository candidates,
             PlaceScorer scorer,
+            RecommendationExplainer explainer,
             PlaceImageRepository images) {
 
         this.profileResolver = profileResolver;
@@ -56,6 +57,7 @@ public class RecommendationService {
         this.embeddingGateway = embeddingGateway;
         this.candidates = candidates;
         this.scorer = scorer;
+        this.explainer = explainer;
         this.images = images;
     }
 
@@ -77,10 +79,7 @@ public class RecommendationService {
         // 2. Xác định số địa điểm cần thiết.
         int perDay = placesPerDay(profile.travelPace());
 
-        int needed = Math.min(
-            100,
-            profile.days() * perDay
-        );
+        int needed = profile.days() * perDay;
 
         // 3. Dựng câu truy vấn ngữ nghĩa.
         String queryText = queryBuilder.build(profile);
@@ -127,8 +126,8 @@ public class RecommendationService {
                 );
         }
 
-        // 5. Loại Bar & Pub nếu chắc chắn có trẻ nhỏ.
-        if (travellingWithChildren(profile.companionType())) {
+        // 5. Loại Bar & Pub khi đi cùng trẻ nhỏ (yêu cầu đặc biệt "kids" hoặc hình thức "Gia đình").
+        if (profile.withKids()) {
             availableCandidates = availableCandidates.stream()
                 .filter(c -> !hasCategory(c, "barPub"))
                 .toList();
@@ -151,15 +150,10 @@ public class RecommendationService {
             )
         );
 
-        // 7. Lấy tối đa 1.5 lần số điểm cần.
-        int recommendedCount = Math.min(
-            available,
-            (int) Math.ceil(
-                needed * CANDIDATE_MULTIPLIER
-            )
-        );
+        // 7. Trả về toàn bộ địa điểm phù hợp (không cắt bớt), đã xếp giảm dần theo điểm.
+        int recommendedCount = available;
 
-        // 8. Xếp thẳng theo điểm: phù hợp nhất đứng đầu, giảm dần.
+// 8. Xếp thẳng theo điểm: phù hợp nhất đứng đầu, giảm dần.
         List<ScoredCandidate> ranked =
             scored.subList(0, recommendedCount);
 
@@ -192,6 +186,9 @@ public class RecommendationService {
             Candidate candidate =
                 scoredPlace.candidate();
 
+            RecommendationExplainer.Explanation why =
+                explainer.explain(scoredPlace, profile);
+
             items.add(new RecommendedPlace(
                 i + 1,
                 candidate.placeId(),
@@ -205,7 +202,11 @@ public class RecommendationService {
                 candidate.latitude(),
                 candidate.longitude(),
                 scoredPlace.score(),
-                scoredPlace.breakdown()
+                scoredPlace.breakdown(),
+                why.matchPercent(),
+                why.matchLabel(),
+                why.reasons(),
+                why.cautions()
             ));
         }
 
@@ -241,20 +242,6 @@ public class RecommendationService {
         };
     }
 
-    private boolean travellingWithChildren(String type) {
-
-        if (type == null) {
-            return false;
-        }
-
-        String value = type.trim().toLowerCase();
-
-        return value.contains("family_kids")
-            || value.contains("family kids")
-            || value.contains("with kids")
-            || value.contains("có trẻ nhỏ");
-    }
-
     private boolean hasCategory(
             Candidate candidate,
             String categoryCode) {
@@ -280,7 +267,15 @@ public class RecommendationService {
         Double latitude,
         Double longitude,
         double score,
-        ScoreBreakdown breakdown
+        ScoreBreakdown breakdown,
+        /** Độ phù hợp 0–100 (= điểm × 100) để hiển thị. */
+        int matchPercent,
+        /** Rất phù hợp / Phù hợp / Có thể bạn thích. */
+        String matchLabel,
+        /** Lý do gợi ý (tối đa 4), dựa trên các thành phần chấm điểm và mô tả địa điểm. */
+        List<String> reasons,
+        /** Lưu ý (chi phí cao, phải leo trèo…); rỗng nếu không có. */
+        List<String> cautions
     ) {}
 
     public record RecommendationResponse(

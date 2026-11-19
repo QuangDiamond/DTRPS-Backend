@@ -1,5 +1,4 @@
 package com.dtrps.modules.user.entity;
-
 import com.dtrps.modules.poi.entity.Province;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

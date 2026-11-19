@@ -39,13 +39,33 @@ public class ItinerarySchedulingService {
             LocalTime start,
             LocalTime end,
             int travelMinutes,
-            BigDecimal estimatedCost
+            BigDecimal estimatedCost,
+            /** Ghi chú khi điểm được xếp ngoài giờ mở cửa / khung giờ đề xuất (null nếu bình thường). */
+            String note
+    ) {
+        Visit(Place place, LocalTime start, LocalTime end, int travelMinutes, BigDecimal estimatedCost) {
+            this(place, start, end, travelMinutes, estimatedCost, null);
+        }
+    }
+
+    /** Kết quả xếp lịch: luôn chứa MỌI địa điểm đã chọn, kèm cảnh báo nếu có chỗ chưa hợp lý. */
+    public record Schedule(
+            List<List<Visit>> days,
+            List<String> warnings
     ) {}
 
     private record Attempt(
             List<List<Visit>> days,
-            int unassignedCount
-    ) {}
+            List<PlanPlace> remaining
+    ) {
+        int unassignedCount() {
+            return remaining.size();
+        }
+    }
+
+    private static final LocalTime LATEST_START = LocalTime.of(22, 0);
+    private static final String OUT_OF_HOURS_NOTE =
+            "Ngoài khung giờ đề xuất hoặc giờ mở cửa – hãy kiểm tra lại giờ tham quan.";
 
     private static final LocalTime DAY_START = LocalTime.of(9, 0);
     private static final LocalTime DAY_END = LocalTime.of(18, 0);
@@ -63,9 +83,10 @@ public class ItinerarySchedulingService {
     }
 
     /**
-     * Sắp xếp hoàn toàn trong bộ nhớ. ItineraryService chỉ lưu sau khi hàm này thành công.
+     * Sắp xếp hoàn toàn trong bộ nhớ. Không chặn người dùng vì số lượng địa điểm hay số ngày:
+     * luôn xếp đủ mọi địa điểm đã chọn; chỗ nào chưa hợp lý thì kèm cảnh báo và ghi chú trên hoạt động.
      */
-    public List<List<Visit>> arrange(TravelPlan plan, List<PlanPlace> selected) {
+    public Schedule arrange(TravelPlan plan, List<PlanPlace> selected) {
         long requestedDays = ChronoUnit.DAYS.between(
                 plan.getStartDate(), plan.getEndDate()) + 1;
 
@@ -79,28 +100,25 @@ public class ItinerarySchedulingService {
                     HttpStatus.BAD_REQUEST,
                     "Hãy chọn ít nhất một địa điểm trước khi tạo lịch trình");
         }
-        if (selected.size() > 100) {
-            throw new ApiException(
-                    HttpStatus.BAD_REQUEST,
-                    "Mỗi kế hoạch tối đa 100 địa điểm");
-        }
-
         int dayCount = (int) requestedDays;
-        int maxDaily = switch (
+        int paceDaily = switch (
                 plan.getTravelPace() == null ? "BALANCED" : plan.getTravelPace()) {
             case "RELAXED" -> 3;
             case "PACKED" -> 6;
             default -> 4;
         };
+        List<String> warnings = new ArrayList<>();
 
-        // Không thể xếp vượt mức sức chứa theo nhịp độ du lịch đã chọn.
-        if (selected.size() > dayCount * maxDaily) {
-            throw new ApiException(
-                    HttpStatus.UNPROCESSABLE_ENTITY,
-                    "Có " + selected.size() + " địa điểm trong " + dayCount
-                            + " ngày, nhưng nhịp độ hiện tại cho phép tối đa "
-                            + maxDaily + " địa điểm/ngày. "
-                            + "Hãy tăng số ngày, đổi nhịp độ hoặc giảm số địa điểm.");
+        // Nhiều địa điểm hơn sức chứa theo nhịp độ: vẫn xếp, mỗi ngày nhận nhiều hơn và cảnh báo.
+        int perDayNeeded = (selected.size() + dayCount - 1) / dayCount;
+        int maxDaily = Math.max(paceDaily, perDayNeeded);
+        if (perDayNeeded > paceDaily) {
+            warnings.add("Có " + selected.size() + " địa điểm cho " + dayCount + " ngày, nhiều hơn nhịp độ đã chọn ("
+                    + paceDaily + " điểm/ngày). Lịch trình vẫn được tạo nhưng mỗi ngày khoảng " + perDayNeeded
+                    + " điểm sẽ khá dày; bạn có thể tăng số ngày, đổi nhịp độ hoặc bỏ bớt địa điểm.");
+        } else if (selected.size() < dayCount) {
+            warnings.add("Chuyến đi có " + dayCount + " ngày nhưng mới chọn " + selected.size()
+                    + " địa điểm nên một số ngày sẽ để trống; bạn có thể thêm địa điểm sau.");
         }
 
         // Cache dùng chung cho các lần thử để không truy vấn DB lặp lại.
@@ -128,28 +146,59 @@ public class ItinerarySchedulingService {
                 plan, selected, dayCount, maxDaily, false, false,
                 hoursCache, costCache));
 
+        // Chọn cách xếp được nhiều điểm nhất; ngang nhau thì cân bằng hơn, ít di chuyển hơn.
         Attempt best = null;
         for (Attempt attempt : attempts) {
-            if (attempt.unassignedCount() != 0) continue;
-            if (best == null || scheduleScore(attempt) < scheduleScore(best)) {
+            if (best == null
+                    || attempt.unassignedCount() < best.unassignedCount()
+                    || (attempt.unassignedCount() == best.unassignedCount()
+                        && scheduleScore(attempt) < scheduleScore(best))) {
                 best = attempt;
             }
         }
 
-        if (best != null) {
-            return best.days();
+        if (!best.remaining().isEmpty()) {
+            placeOverflow(plan, best, costCache);
+            List<String> names = best.remaining().stream()
+                    .map(row -> row.getPlace() == null ? "?" : row.getPlace().getName())
+                    .toList();
+            warnings.add(names.size() + " địa điểm không vừa giờ mở cửa hoặc khung 09:00–18:00 nên được thêm vào cuối "
+                    + "ngày ít hoạt động nhất, hãy kiểm tra lại giờ tham quan: " + String.join(", ", names) + ".");
         }
 
-        int fewestUnassigned = attempts.stream()
-                .mapToInt(Attempt::unassignedCount)
-                .min()
-                .orElse(selected.size());
-        throw new ApiException(
-                HttpStatus.UNPROCESSABLE_ENTITY,
-                "Không đủ ngày hoặc khung giờ mở cửa để xếp tất cả "
-                        + selected.size() + " địa điểm đã chọn. Còn "
-                        + fewestUnassigned + " địa điểm chưa xếp được. "
-                        + "Hãy tăng số ngày hoặc bỏ bớt địa điểm.");
+        int busiest = best.days().stream().mapToInt(List::size).max().orElse(0);
+        if (busiest > paceDaily && perDayNeeded <= paceDaily) {
+            warnings.add("Một số ngày có " + busiest + " điểm, nhiều hơn nhịp độ đã chọn (" + paceDaily + " điểm/ngày).");
+        }
+        return new Schedule(best.days(), List.copyOf(warnings));
+    }
+
+    /**
+     * Các điểm không xếp được vào khung giờ hợp lệ: vẫn đưa vào lịch trình, nối vào cuối ngày đang ít hoạt
+     * động nhất (giờ bắt đầu nối tiếp hoạt động trước, muộn nhất 22:00) và gắn ghi chú để người dùng chỉnh lại.
+     */
+    private void placeOverflow(TravelPlan plan, Attempt attempt, Map<Long, BigDecimal> costCache) {
+        List<List<Visit>> days = attempt.days();
+        for (PlanPlace row : attempt.remaining()) {
+            Place place = row.getPlace();
+            int target = 0;
+            for (int d = 1; d < days.size(); d++) {
+                if (days.get(d).size() < days.get(target).size()) target = d;
+            }
+            List<Visit> day = days.get(target);
+            Visit last = day.isEmpty() ? null : day.get(day.size() - 1);
+            int travel = last == null || place == null ? 0 : estimateTravelMinutes(last.place(), place);
+            LocalTime start = last == null ? DAY_START : last.end().plusMinutes(REST_MINUTES + travel);
+            if (last != null && (start.isBefore(last.end()) || start.isAfter(LATEST_START))) {
+                start = LATEST_START; // tránh tràn sang ngày hôm sau
+            }
+            int stay = place == null ? 60 : visitDurationMinutes(place);
+            LocalTime end = start.plusMinutes(stay);
+            if (end.isBefore(start)) end = LocalTime.of(23, 59);
+            BigDecimal cost = place == null ? null : costCache.computeIfAbsent(
+                    place.getPlaceId(), key -> referenceCost(key, plan.getGroupSize()));
+            day.add(new Visit(place, start, end, travel, cost, OUT_OF_HOURS_NOTE));
+        }
     }
 
     /**
@@ -240,7 +289,7 @@ public class ItinerarySchedulingService {
             }
             result.add(visits);
         }
-        return new Attempt(result, remaining.size());
+        return new Attempt(result, remaining);
     }
 
     /**
