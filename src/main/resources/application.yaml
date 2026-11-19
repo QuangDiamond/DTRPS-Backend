@@ -58,6 +58,8 @@ app:
     issuer: dtrps
     access-ttl: ${JWT_ACCESS_TTL:15m}
     refresh-ttl: ${JWT_REFRESH_TTL:30d}
+    # Tài khoản ADMIN: phiên tối đa bao lâu kể từ lúc đăng nhập (làm mới token không kéo dài thêm)
+    admin-session-max: ${JWT_ADMIN_SESSION_MAX:8h}
   auth:
     rate-limit-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:20}
     max-failed-logins: ${AUTH_MAX_FAILED_LOGINS:10}
