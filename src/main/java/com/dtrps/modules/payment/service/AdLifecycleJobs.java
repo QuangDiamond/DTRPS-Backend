@@ -1,5 +1,6 @@
 package com.dtrps.modules.payment.service;
 
+import com.dtrps.modules.admin.service.SystemSettingsService;
 import com.dtrps.modules.notification.dto.Notice;
 import com.dtrps.modules.notification.service.NotificationService;
 import com.dtrps.modules.payment.entity.Subscription;
@@ -29,7 +30,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class AdLifecycleJobs {
   private static final Logger log = LoggerFactory.getLogger(AdLifecycleJobs.class);
   private static final Duration RECONCILE_AFTER = Duration.ofMinutes(2);
-  private static final Duration RENEWAL_NOTICE = Duration.ofDays(7);
   private static final int BATCH = 50;
   private static final long FIVE_MINUTES = 300_000;
   private static final long FIFTEEN_MINUTES = 900_000;
@@ -44,6 +44,8 @@ public class AdLifecycleJobs {
   private final TransactionTemplate transaction;
   private final Clock clock;
 
+  private final SystemSettingsService settings;
+
   public AdLifecycleJobs(
       PaymentRepository payments,
       SubscriptionRepository subscriptions,
@@ -52,7 +54,9 @@ public class AdLifecycleJobs {
       AdSubscriptionOps subscriptionOps,
       NotificationService notifications,
       PlatformTransactionManager transactionManager,
+      SystemSettingsService settings,
       Clock clock) {
+    this.settings = settings;
     this.payments = payments;
     this.subscriptions = subscriptions;
     this.windows = windows;
@@ -105,7 +109,8 @@ public class AdLifecycleJobs {
 
   @Scheduled(fixedDelay = ONE_HOUR)
   void openRenewalWindows() {
-    Instant limit = clock.instant().plus(RENEWAL_NOTICE);
+    // Số ngày nhắc gia hạn do admin chỉnh ở Cài đặt hệ thống
+    Instant limit = clock.instant().plus(settings.renewalNotice());
     for (Long id : subscriptions.findNeedingRenewalWindow(limit)) {
       transaction.executeWithoutResult(status -> openWindow(id));
     }

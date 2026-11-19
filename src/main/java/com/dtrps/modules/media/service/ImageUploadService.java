@@ -1,6 +1,7 @@
 package com.dtrps.modules.media.service;
 
 import com.dtrps.exception.ApiException;
+import com.dtrps.modules.admin.service.SystemSettingsService;
 import com.dtrps.modules.media.config.CloudinaryProperties;
 import java.io.IOException;
 import java.util.Map;
@@ -11,9 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 /** Accepts only real jpg / png / webp files (checked by their bytes, not just the name). */
 @Service
 public class ImageUploadService {
-  public static final long MAX_BYTES = 5L * 1024 * 1024;
   static final String EMPTY = "Vui lòng chọn ảnh";
-  static final String TOO_LARGE = "Ảnh tối đa 5MB";
   static final String UNSUPPORTED = "Chỉ nhận ảnh jpg, png hoặc webp";
   private static final String REVIEW_FOLDER = "dtrps/reviews";
 
@@ -22,10 +21,13 @@ public class ImageUploadService {
 
   private final ImageStorage storage;
   private final CloudinaryProperties properties;
+  private final SystemSettingsService settings;
 
-  public ImageUploadService(ImageStorage storage, CloudinaryProperties properties) {
+  public ImageUploadService(
+      ImageStorage storage, CloudinaryProperties properties, SystemSettingsService settings) {
     this.storage = storage;
     this.properties = properties;
+    this.settings = settings;
   }
 
   /** A place photo (default folder). */
@@ -47,8 +49,10 @@ public class ImageUploadService {
     if (file == null || file.isEmpty()) {
       throw new ApiException(HttpStatus.BAD_REQUEST, EMPTY);
     }
-    if (file.getSize() > MAX_BYTES) {
-      throw new ApiException(HttpStatus.PAYLOAD_TOO_LARGE, TOO_LARGE);
+    // Giới hạn do admin chỉnh ở Cài đặt hệ thống (1–10MB; multipart chặn cứng ở 10MB)
+    if (file.getSize() > settings.maxImageBytes()) {
+      throw new ApiException(
+          HttpStatus.PAYLOAD_TOO_LARGE, "Ảnh tối đa " + settings.maxImageMb() + "MB");
     }
     byte[] content;
     try {

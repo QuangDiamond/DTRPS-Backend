@@ -59,6 +59,11 @@ public class LiveEventHub {
         .forEach(c -> send(c, event));
   }
 
+  /** Every open tab of every signed-in user, e.g. the site-wide banner changed. */
+  public void sendToAll(LiveEvent event) {
+    clients.forEach(c -> send(c, event));
+  }
+
   /** Comment lines keep idle connections open through proxies and reveal closed tabs. */
   @Scheduled(fixedDelay = 25_000)
   void heartbeat() {

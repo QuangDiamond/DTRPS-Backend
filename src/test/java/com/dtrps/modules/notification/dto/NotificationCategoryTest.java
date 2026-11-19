@@ -8,7 +8,8 @@ class NotificationCategoryTest {
 
   @Test
   void groupsExistingTypesByPrefix() {
-    assertThat(NotificationCategory.of("PARTNER_SUBMITTED")).isEqualTo(NotificationCategory.LISTING);
+    assertThat(NotificationCategory.of("PARTNER_SUBMITTED"))
+        .isEqualTo(NotificationCategory.LISTING);
     assertThat(NotificationCategory.of("LISTING_APPROVED")).isEqualTo(NotificationCategory.LISTING);
     assertThat(NotificationCategory.of("REVISION_SUBMITTED"))
         .isEqualTo(NotificationCategory.LISTING);

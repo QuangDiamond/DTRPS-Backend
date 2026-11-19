@@ -44,8 +44,6 @@ public class AdminPlaceEditService {
       "Địa điểm của đối tác chỉ thay đổi qua bản sửa do đối tác gửi";
   private static final String FULL_WEEK =
       "Vui lòng gửi giờ mở cửa của cả 7 ngày (Thứ 2 đến Chủ nhật)";
-  private static final String TOO_MANY_IMAGES =
-      "Tối đa " + PlaceDetailsService.MAX_IMAGES + " ảnh cho một địa điểm";
   private static final String DUPLICATE_IMAGE = "Ảnh này đã có trong địa điểm";
   private static final String IMAGE_NOT_FOUND = "Không tìm thấy ảnh";
   private static final String PRICE_NOT_FOUND = "Không tìm thấy mức giá";
@@ -180,8 +178,9 @@ public class AdminPlaceEditService {
     Place place = editable(placeId);
     String url = request.url().trim();
     long count = imageRepository.countByPlacePlaceId(placeId);
-    if (count >= PlaceDetailsService.MAX_IMAGES) {
-      throw new ApiException(HttpStatus.BAD_REQUEST, TOO_MANY_IMAGES);
+    int max = placeDetails.maxImages();
+    if (count >= max) {
+      throw new ApiException(HttpStatus.BAD_REQUEST, PlaceDetailsService.tooManyImages(max));
     }
     if (imageRepository.existsByPlacePlaceIdAndImageUrl(placeId, url)) {
       throw new ApiException(HttpStatus.CONFLICT, DUPLICATE_IMAGE);

@@ -1,6 +1,7 @@
 package com.dtrps.modules.poi.service;
 
 import com.dtrps.exception.ApiException;
+import com.dtrps.modules.admin.service.SystemSettingsService;
 import com.dtrps.modules.poi.dto.ImageDto;
 import com.dtrps.modules.poi.dto.OpeningHourDto;
 import com.dtrps.modules.poi.dto.PlaceDetails;
@@ -25,13 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 /** Reads and replaces a place's opening hours, prices and photos as one set. */
 @Service
 public class PlaceDetailsService {
-  public static final int MAX_IMAGES = 10;
   private static final String DEFAULT_CURRENCY = "VND";
 
   private static final String DUPLICATE_DAY = "Mỗi ngày trong tuần chỉ khai báo giờ mở cửa một lần";
   private static final String MISSING_TIMES = "Ngày mở cửa cần có cả giờ mở và giờ đóng";
   private static final String SAME_TIMES = "Giờ mở cửa và giờ đóng cửa không được trùng nhau";
-  private static final String TOO_MANY_IMAGES = "Tối đa " + MAX_IMAGES + " ảnh cho một địa điểm";
   private static final String MANY_COVERS = "Chỉ chọn một ảnh bìa";
   private static final String DUPLICATE_IMAGE = "Ảnh bị trùng";
 
@@ -39,10 +38,23 @@ public class PlaceDetailsService {
   private final PlacePriceRepository priceRepository;
   private final PlaceImageRepository imageRepository;
 
+  private final SystemSettingsService settings;
+
+  /** Số ảnh tối đa của một địa điểm — admin chỉnh ở Cài đặt hệ thống */
+  public int maxImages() {
+    return settings.maxPlaceImages();
+  }
+
+  public static String tooManyImages(int max) {
+    return "Tối đa " + max + " ảnh cho một địa điểm";
+  }
+
   public PlaceDetailsService(
       PlaceOpeningHourRepository hourRepository,
       PlacePriceRepository priceRepository,
-      PlaceImageRepository imageRepository) {
+      PlaceImageRepository imageRepository,
+      SystemSettingsService settings) {
+    this.settings = settings;
     this.hourRepository = hourRepository;
     this.priceRepository = priceRepository;
     this.imageRepository = imageRepository;
@@ -118,8 +130,9 @@ public class PlaceDetailsService {
             .toList();
 
     List<ImageDto> source = nullToEmpty(images);
-    if (source.size() > MAX_IMAGES) {
-      throw new ApiException(HttpStatus.BAD_REQUEST, TOO_MANY_IMAGES);
+    int max = maxImages();
+    if (source.size() > max) {
+      throw new ApiException(HttpStatus.BAD_REQUEST, tooManyImages(max));
     }
     if (source.stream().filter(ImageDto::primary).count() > 1) {
       throw new ApiException(HttpStatus.BAD_REQUEST, MANY_COVERS);
