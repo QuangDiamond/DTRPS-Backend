@@ -1,5 +1,7 @@
 package com.dtrps.modules.notification.controller;
 
+import com.dtrps.exception.ApiException;
+import com.dtrps.modules.notification.dto.NotificationCategory;
 import com.dtrps.modules.notification.dto.NotificationPage;
 import com.dtrps.modules.notification.dto.NotificationResponse;
 import com.dtrps.modules.notification.service.LiveEventHub;
@@ -10,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.util.Map;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -40,13 +43,22 @@ public class NotificationController {
   }
 
   @GetMapping
-  @Operation(summary = "Thông báo của tôi, mới nhất trước")
+  @Operation(
+      summary = "Thông báo của tôi, mới nhất trước",
+      description = "category: REVIEW, LISTING, ADS, TRIP, OTHER — bỏ trống = tất cả")
   public NotificationPage list(
       @AuthenticationPrincipal Jwt jwt,
       @RequestParam(defaultValue = "false") boolean unread,
+      @RequestParam(required = false) String category,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size) {
-    return notificationService.list(CurrentUser.id(jwt), unread, page, size);
+    NotificationCategory tab =
+        category == null || category.isBlank()
+            ? null
+            : NotificationCategory.parse(category)
+                .orElseThrow(
+                    () -> new ApiException(HttpStatus.BAD_REQUEST, "Nhóm thông báo không hợp lệ"));
+    return notificationService.list(CurrentUser.id(jwt), unread, tab, page, size);
   }
 
   @GetMapping("/unread-count")

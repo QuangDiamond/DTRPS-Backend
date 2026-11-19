@@ -7,6 +7,7 @@ public record Notice(
     String type, String title, String message, String link, Map<String, Object> data) {
 
   public LiveEvent toEvent(Long notificationId) {
-    return new LiveEvent(type, notificationId, title, message, link, data);
+    return new LiveEvent(
+        type, NotificationCategory.of(type).name(), notificationId, title, message, link, data);
   }
 }

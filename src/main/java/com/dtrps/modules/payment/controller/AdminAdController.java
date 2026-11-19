@@ -171,7 +171,7 @@ public class AdminAdController {
       @RequestParam(required = false) String keyword,
       @RequestParam(required = false)
           @Pattern(
-              regexp = "^(ACTIVE|EXPIRED|CANCELLED)$",
+              regexp = "^(ACTIVE|EXPIRED|CANCELLED|MANUAL)$",
               message = "Trạng thái gói không hợp lệ")
           String status,
       @RequestParam(defaultValue = "0") @Min(0) int page,
