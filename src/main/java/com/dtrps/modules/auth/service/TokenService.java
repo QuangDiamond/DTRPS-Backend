@@ -13,6 +13,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -31,6 +32,7 @@ import org.springframework.stereotype.Service;
 public class TokenService {
   public static final String ROLES_CLAIM = "roles";
   public static final String USER_ACTIVE = "ACTIVE";
+  static final String ROLE_ADMIN = "ADMIN";
 
   private static final int REFRESH_TOKEN_BYTES = 32;
   private static final String INVALID_REFRESH_TOKEN =
@@ -55,8 +57,11 @@ public class TokenService {
   }
 
   public TokenPair issue(User user) {
-    refreshTokenRepository.deleteExpiredForUser(user.getUserId(), clock.instant());
-    return createPair(user, UUID.randomUUID());
+    Instant now = clock.instant();
+    refreshTokenRepository.deleteExpiredForUser(user.getUserId(), now);
+    Duration lifetime =
+        isAdmin(user) ? jwtProperties.adminSessionMax() : jwtProperties.refreshTtl();
+    return createPair(user, UUID.randomUUID(), now.plus(lifetime));
   }
 
   /** Replaces a refresh token. Replaying a used token ends the whole login session. */
@@ -79,7 +84,13 @@ public class TokenService {
       throw new ApiException(HttpStatus.FORBIDDEN, ACCOUNT_LOCKED);
     }
     current.setRevokedAt(now);
-    return new RotatedSession(user, createPair(user, current.getFamilyId()));
+    // Admin: giữ nguyên mốc hết hạn của lần đăng nhập (tối đa adminSessionMax); người khác: trượt
+    // thêm refreshTtl mỗi lần làm mới
+    Instant expiresAt =
+        isAdmin(user)
+            ? earliest(current.getExpiresAt(), now.plus(jwtProperties.adminSessionMax()))
+            : now.plus(jwtProperties.refreshTtl());
+    return new RotatedSession(user, createPair(user, current.getFamilyId(), expiresAt));
   }
 
   public void revoke(String rawToken) {
@@ -93,14 +104,22 @@ public class TokenService {
     refreshTokenRepository.revokeAllForUser(userId, clock.instant());
   }
 
-  private TokenPair createPair(User user, UUID familyId) {
+  private static boolean isAdmin(User user) {
+    return user.getRoles().stream().anyMatch(role -> ROLE_ADMIN.equals(role.getRoleName()));
+  }
+
+  private static Instant earliest(Instant a, Instant b) {
+    return a.isBefore(b) ? a : b;
+  }
+
+  private TokenPair createPair(User user, UUID familyId, Instant expiresAt) {
     Instant now = clock.instant();
     String rawRefreshToken = newRefreshToken();
     RefreshToken entity = new RefreshToken();
     entity.setUser(user);
     entity.setFamilyId(familyId);
     entity.setTokenHash(hash(rawRefreshToken));
-    entity.setExpiresAt(now.plus(jwtProperties.refreshTtl()));
+    entity.setExpiresAt(expiresAt);
     refreshTokenRepository.save(entity);
     return new TokenPair(
         createAccessToken(user, now), rawRefreshToken, jwtProperties.accessTtl().toSeconds());
