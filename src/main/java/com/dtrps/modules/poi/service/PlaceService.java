@@ -33,6 +33,48 @@ public class PlaceService {
   private static final String ACTIVE = "ACTIVE";
   static final String PLACE_NOT_FOUND = "Không tìm thấy địa điểm";
 
+  /**
+   * Bảng bỏ dấu tiếng Việt cho hàm translate() của PostgreSQL (có sẵn, không cần extension unaccent).
+   * Gồm cả chữ hoa vì lower() có thể không hạ chữ có dấu khi DB dùng collation "C".
+   */
+  private static final String[][] VI_GROUPS = {
+    {"aàáạảãâầấậẩẫăằắặẳẵ", "a"},
+    {"eèéẹẻẽêềếệểễ", "e"},
+    {"iìíịỉĩ", "i"},
+    {"oòóọỏõôồốộổỗơờớợởỡ", "o"},
+    {"uùúụủũưừứựửữ", "u"},
+    {"yỳýỵỷỹ", "y"},
+    {"dđ", "d"},
+  };
+  static final String VI_FROM;
+  static final String VI_TO;
+
+  static {
+    StringBuilder from = new StringBuilder();
+    StringBuilder to = new StringBuilder();
+    for (String[] group : VI_GROUPS) {
+      String lower = group[0].substring(1); // bỏ ký tự gốc không dấu
+      String upper = lower.toUpperCase(Locale.ROOT);
+      for (String chars : new String[] {lower, upper}) {
+        from.append(chars);
+        to.append(group[1].repeat(chars.length()));
+      }
+    }
+    VI_FROM = from.toString();
+    VI_TO = to.toString();
+  }
+
+  /** Chữ thường, bỏ dấu tiếng Việt (đ → d) – cùng quy tắc với VI_FROM/VI_TO ở phía DB. */
+  static String foldVietnamese(String value) {
+    String lower = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFC).toLowerCase(Locale.ROOT);
+    StringBuilder out = new StringBuilder(lower.length());
+    for (char c : lower.toCharArray()) {
+      int at = VI_FROM.indexOf(c);
+      out.append(at >= 0 ? VI_TO.charAt(at) : c);
+    }
+    return out.toString();
+  }
+
   private record Rating(Double average, long count) {}
 
   private final PlaceRepository placeRepository;
@@ -57,8 +99,21 @@ public class PlaceService {
       String keyword, String category, String province, Pageable pageable) {
     Specification<Place> spec = (root, query, cb) -> cb.equal(root.get("status"), ACTIVE);
     if (hasText(keyword)) {
-      String like = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
-      spec = spec.and((root, query, cb) -> cb.like(cb.lower(root.get("name")), like));
+      // Tìm theo tên, không phân biệt hoa thường và dấu: "chua huong" khớp "Chùa Hương".
+      // Khớp từ đầu một từ (đầu tên hoặc sau dấu cách) để "ho tay" không khớp "Phố Tây".
+      String term = foldVietnamese(keyword.trim()).replaceAll("\\s+", " ");
+      spec =
+          spec.and(
+              (root, query, cb) -> {
+                var folded =
+                    cb.function(
+                        "translate",
+                        String.class,
+                        cb.lower(root.get("name")),
+                        cb.literal(VI_FROM),
+                        cb.literal(VI_TO));
+                return cb.or(cb.like(folded, term + "%"), cb.like(folded, "% " + term + "%"));
+              });
     }
     if (hasText(category)) {
       String code = category.trim();

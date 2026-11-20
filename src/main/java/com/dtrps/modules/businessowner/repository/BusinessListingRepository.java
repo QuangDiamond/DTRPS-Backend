@@ -10,6 +10,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface BusinessListingRepository
     extends JpaRepository<BusinessListing, Long>, JpaSpecificationExecutor<BusinessListing> {
@@ -48,6 +50,18 @@ public interface BusinessListingRepository
   /** Listings (with their business) of the given places — places without one are admin POIs */
   @EntityGraph(attributePaths = {"business", "place"})
   List<BusinessListing> findByPlacePlaceIdIn(Collection<Long> placeIds);
+
+  /**
+   * Địa điểm của đối tác đã xác minh tại một tỉnh/thành: niêm yết APPROVED, doanh nghiệp ACTIVE,
+   * địa điểm ACTIVE. {@code destination} là tên hoặc mã tỉnh đã viết thường, bỏ khoảng trắng hai đầu.
+   */
+  @Query(
+      "select l from BusinessListing l join fetch l.business b join fetch l.place p"
+          + " left join fetch p.category c join p.province pr"
+          + " where l.status = 'APPROVED' and b.status = 'ACTIVE' and p.status = 'ACTIVE'"
+          + " and (lower(trim(pr.name)) = :destination or lower(trim(pr.code)) = :destination)"
+          + " order by l.approvedAt desc nulls last, l.listingId desc")
+  List<BusinessListing> findVerifiedInProvince(@Param("destination") String destination);
 
   boolean existsByPlacePlaceId(Long placeId);
 
