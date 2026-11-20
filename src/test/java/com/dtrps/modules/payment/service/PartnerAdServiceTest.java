@@ -132,6 +132,7 @@ class PartnerAdServiceTest {
     lenient().when(packages.findById(1L)).thenReturn(Optional.of(basic));
 
     lenient().when(settings.paymentLinkTtl()).thenReturn(Duration.ofMinutes(15));
+    lenient().when(settings.renewalNotice()).thenReturn(Duration.ofDays(7));
     lenient().when(payments.nextOrderCode()).thenReturn(ORDER);
     lenient()
         .when(subscriptions.saveAndFlush(any(Subscription.class)))

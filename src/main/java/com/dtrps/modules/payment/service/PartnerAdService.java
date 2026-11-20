@@ -322,7 +322,11 @@ public class PartnerAdService {
             .orElseThrow(
                 () ->
                     new ApiException(
-                        HttpStatus.CONFLICT, "Chỉ gia hạn được trong 7 ngày cuối của gói"));
+                        HttpStatus.CONFLICT,
+                        // Số ngày do admin chỉnh ở Cài đặt hệ thống (rules.renewal_notice_days)
+                        "Chỉ gia hạn được trong "
+                            + settings.renewalNotice().toDays()
+                            + " ngày cuối của gói"));
     Optional<Payment> reusable = reuseOrClosePending(business.getBusinessId());
     if (reusable.isPresent()) {
       return reusable.get();

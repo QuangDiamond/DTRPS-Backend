@@ -75,7 +75,10 @@ public final class AdDtos {
               message = "Ảnh biên lai không hợp lệ")
           String receiptUrl) {}
 
-  /** {@code renewable}: đang trong 7 ngày cuối và cửa sổ gia hạn đang mở */
+  /**
+   * {@code renewable}: đang trong N ngày cuối (Cài đặt hệ thống → rules.renewal_notice_days) và cửa
+   * sổ gia hạn đang mở
+   */
   public record PartnerState(
       SubscriptionInfo subscription,
       PaymentItem pendingPayment,
