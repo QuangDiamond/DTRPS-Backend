@@ -242,7 +242,7 @@ class AdminPlaceEditApiTest extends ApiTestBase {
   @Test
   @DisplayName("partner places cannot be edited by the admin directly")
   void partnerPlace_isLocked() throws Exception {
-    String token = travellerToken();
+    String token = partnerToken();
     String admin = adminToken();
     String taxCode =
         String.valueOf(ThreadLocalRandom.current().nextLong(1_000_000_000L, 9_999_999_999L));

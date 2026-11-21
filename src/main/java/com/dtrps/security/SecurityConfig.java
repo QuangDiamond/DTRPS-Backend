@@ -100,6 +100,12 @@ public class SecurityConfig {
                                         .requestMatchers("/api/admin/**")
                                         .hasRole("ADMIN")
 
+                                        // Business owner APIs require BUSINESS_OWNER role.
+                                        .requestMatchers(
+                                                "/api/business-profile/**",
+                                                "/api/business-listings/**")
+                                        .hasRole("BUSINESS_OWNER")
+
                                         // Public read-only APIs.
                                         // PayOS gọi về, xác thực bằng chữ ký trong nội dung.
                                         .requestMatchers(

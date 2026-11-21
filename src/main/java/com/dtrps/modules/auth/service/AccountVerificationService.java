@@ -10,6 +10,7 @@ import com.dtrps.modules.auth.dto.RegisterOtpRequest;
 import com.dtrps.modules.auth.dto.ResetPasswordRequest;
 import com.dtrps.modules.auth.dto.VerifyOtpRequest;
 import com.dtrps.modules.auth.entity.EmailOtp;
+import com.dtrps.modules.user.entity.RoleName;
 import com.dtrps.modules.user.repository.UserRepository;
 import com.dtrps.modules.user.service.UserService;
 import org.springframework.http.HttpStatus;
@@ -55,6 +56,11 @@ public class AccountVerificationService {
   @Transactional
   public AuthResponse completeRegistration(CompleteRegistrationRequest request) {
     String email = otpService.consume(request.ticket(), EmailOtp.REGISTER);
+    // Đăng ký ở cổng Đối tác → tài khoản BUSINESS_OWNER ngay từ đầu; còn lại là du khách
+    if (RoleName.BUSINESS_OWNER.name().equals(request.accountType())) {
+      return authService.registerVerified(
+          request.name().trim(), email, request.password(), RoleName.BUSINESS_OWNER);
+    }
     return authService.registerVerified(request.name().trim(), email, request.password());
   }
 

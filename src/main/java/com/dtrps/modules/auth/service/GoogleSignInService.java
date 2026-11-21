@@ -65,6 +65,10 @@ public class GoogleSignInService {
       if (isAdmin(existing)) {
         throw new ApiException(HttpStatus.FORBIDDEN, ADMIN_REFUSED);
       }
+      // Google chỉ dùng cho cổng Du khách; tài khoản đối tác đăng nhập bằng email + mật khẩu
+      if (AuthService.isPartner(existing)) {
+        throw new ApiException(HttpStatus.FORBIDDEN, AuthService.WRONG_PORTAL_PARTNER);
+      }
       if (!TokenService.USER_ACTIVE.equals(existing.getStatus())) {
         throw new ApiException(HttpStatus.FORBIDDEN, ACCOUNT_LOCKED);
       }

@@ -67,6 +67,13 @@ public class AuthService {
     return AuthResponse.of(user, tokenService.issue(user));
   }
 
+  private static final String WRONG_PORTAL_TRAVELLER =
+      "Đây là tài khoản Du khách. Vui lòng đăng nhập tại cổng Du khách.";
+  static final String WRONG_PORTAL_PARTNER =
+      "Đây là tài khoản Đối tác. Vui lòng đăng nhập tại cổng Đối tác.";
+  private static final String PORTAL_TRAVELLER = "TRAVELLER";
+  private static final String PORTAL_PARTNER = "PARTNER";
+
   @Transactional
   public AuthResponse login(LoginRequest request) {
     String email = UserService.normalizeEmail(request.email());
@@ -82,7 +89,30 @@ public class AuthService {
     if (!TokenService.USER_ACTIVE.equals(user.getStatus())) {
       throw new ApiException(HttpStatus.FORBIDDEN, ACCOUNT_LOCKED);
     }
+    requirePortal(user, request.portal());
     return AuthResponse.of(user, tokenService.issue(user));
+  }
+
+  /**
+   * Một tài khoản chỉ đăng nhập ở đúng cổng của nó. {@code portal} null (trang admin) thì bỏ qua.
+   * Kiểm tra sau mật khẩu nên không lộ loại tài khoản cho người không biết mật khẩu.
+   */
+  static void requirePortal(User user, String portal) {
+    if (portal == null) {
+      return;
+    }
+    boolean partner = isPartner(user);
+    if (PORTAL_TRAVELLER.equals(portal) && partner) {
+      throw new ApiException(HttpStatus.FORBIDDEN, WRONG_PORTAL_PARTNER);
+    }
+    if (PORTAL_PARTNER.equals(portal) && !partner) {
+      throw new ApiException(HttpStatus.FORBIDDEN, WRONG_PORTAL_TRAVELLER);
+    }
+  }
+
+  static boolean isPartner(User user) {
+    return user.getRoles().stream()
+        .anyMatch(role -> RoleName.BUSINESS_OWNER.name().equals(role.getRoleName()));
   }
 
   /** Commits on rejection so that revoking a replayed token family is not rolled back. */
@@ -131,7 +161,22 @@ public class AuthService {
   /** Sign-up after the email was verified by a code (AccountVerificationService). */
   @Transactional
   public AuthResponse registerVerified(String name, String email, String password) {
-    return register(new RegisterRequest(name, email, password));
+    return registerVerified(name, email, password, RoleName.TRAVELLER);
+  }
+
+  /** Như trên nhưng chọn loại tài khoản: du khách hoặc đối tác (một email chỉ một loại). */
+  @Transactional
+  public AuthResponse registerVerified(String name, String email, String password, RoleName role) {
+    requireBcryptLength(password);
+    if (userRepository.existsByEmail(email)) {
+      throw new ApiException(HttpStatus.CONFLICT, EMAIL_TAKEN);
+    }
+    try {
+      User user = userService.createUser(name, email, password, role);
+      return AuthResponse.of(user, tokenService.issue(user));
+    } catch (DataIntegrityViolationException e) {
+      throw new ApiException(HttpStatus.CONFLICT, EMAIL_TAKEN);
+    }
   }
 
   /**

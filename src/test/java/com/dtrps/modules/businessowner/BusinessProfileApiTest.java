@@ -29,18 +29,18 @@ class BusinessProfileApiTest extends ApiTestBase {
     return body;
   }
 
-  /** Registers a profile for a new user and returns {email, token, id}. */
+  /** Registers a profile for a new partner and returns {email, token, id}. */
   private Map<String, String> registeredOwner() throws Exception {
     String email = uniqueEmail();
-    String token = session(email).get("accessToken").asText();
+    String token = partnerSession(email).get("accessToken").asText();
     JsonNode profile = json(postAs(OWN, token, profileBody(uniqueTaxCode())));
     return Map.of("email", email, "token", token, "id", profile.get("id").asText());
   }
 
   @Test
-  @DisplayName("a user registers a business profile, which starts PENDING")
+  @DisplayName("a partner registers a business profile, which starts PENDING")
   void register_createsPendingProfile() throws Exception {
-    String token = travellerToken();
+    String token = partnerToken();
     String taxCode = uniqueTaxCode();
 
     postAs(OWN, token, profileBody(taxCode))
@@ -53,14 +53,14 @@ class BusinessProfileApiTest extends ApiTestBase {
   }
 
   @Test
-  @DisplayName("a user has at most one profile and a tax code belongs to one business")
+  @DisplayName("a partner has at most one profile and a tax code belongs to one business")
   void register_rejectsDuplicates() throws Exception {
-    String token = travellerToken();
+    String token = partnerToken();
     String taxCode = uniqueTaxCode();
     postAs(OWN, token, profileBody(taxCode)).andExpect(status().isCreated());
 
     postAs(OWN, token, profileBody(uniqueTaxCode())).andExpect(status().isConflict());
-    postAs(OWN, travellerToken(), profileBody(taxCode)).andExpect(status().isConflict());
+    postAs(OWN, partnerToken(), profileBody(taxCode)).andExpect(status().isConflict());
   }
 
   @Test
@@ -71,7 +71,7 @@ class BusinessProfileApiTest extends ApiTestBase {
     body.put("contactEmail", "not-an-email");
     body.put("contactPhone", "abc");
 
-    postAs(OWN, travellerToken(), body)
+    postAs(OWN, partnerToken(), body)
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors.businessName").isNotEmpty())
         .andExpect(jsonPath("$.errors.taxCode").isNotEmpty())
@@ -80,9 +80,17 @@ class BusinessProfileApiTest extends ApiTestBase {
   }
 
   @Test
-  @DisplayName("a user without a profile gets 404")
+  @DisplayName("a partner without a profile gets 404")
   void getOwn_withoutProfile_returnsNotFound() throws Exception {
-    getAs(OWN, travellerToken()).andExpect(status().isNotFound());
+    getAs(OWN, partnerToken()).andExpect(status().isNotFound());
+  }
+
+  @Test
+  @DisplayName("travellers are forbidden from business profile endpoints")
+  void ownRoutes_forbiddenForTravellers() throws Exception {
+    String traveller = travellerToken();
+    getAs(OWN, traveller).andExpect(status().isForbidden());
+    postAs(OWN, traveller, profileBody(uniqueTaxCode())).andExpect(status().isForbidden());
   }
 
   @Test

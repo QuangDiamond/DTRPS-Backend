@@ -192,3 +192,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_issue_open
 ON payment_issues(payment_id)
 WHERE status = 'OPEN'
 @@
+
+-- Chuẩn hóa tài khoản cũ có cả 2 role (TRAVELLER + BUSINESS_OWNER) về duy nhất BUSINESS_OWNER
+DELETE FROM user_roles ur
+USING roles r
+WHERE ur.role_id = r.role_id
+  AND r.role_name = 'TRAVELLER'
+  AND EXISTS (
+      SELECT 1
+      FROM user_roles ur2
+      JOIN roles r2 ON r2.role_id = ur2.role_id
+      WHERE ur2.user_id = ur.user_id
+        AND r2.role_name = 'BUSINESS_OWNER'
+  )
+@@

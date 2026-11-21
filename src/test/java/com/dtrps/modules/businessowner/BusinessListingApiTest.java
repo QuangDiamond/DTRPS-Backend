@@ -30,9 +30,9 @@ class BusinessListingApiTest extends ApiTestBase {
     return body;
   }
 
-  /** A user with a business profile; approved = true makes the profile ACTIVE. */
+  /** A partner with a business profile; approved = true makes the profile ACTIVE. */
   private String ownerToken(boolean approved) throws Exception {
-    String token = travellerToken();
+    String token = partnerToken();
     String taxCode =
         String.valueOf(ThreadLocalRandom.current().nextLong(1_000_000_000L, 9_999_999_999L));
     JsonNode profile =

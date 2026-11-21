@@ -13,6 +13,7 @@ import com.dtrps.modules.auth.dto.CompleteRegistrationRequest;
 import com.dtrps.modules.auth.dto.EmailRequest;
 import com.dtrps.modules.auth.dto.RegisterOtpRequest;
 import com.dtrps.modules.auth.entity.EmailOtp;
+import com.dtrps.modules.user.entity.RoleName;
 import com.dtrps.modules.user.entity.User;
 import com.dtrps.modules.user.repository.UserRepository;
 import jakarta.validation.ConstraintViolation;
@@ -144,6 +145,30 @@ class AccountVerificationServiceTest {
 
       assertThat(e.getMessage()).isEqualTo(TICKET_EXPIRED);
       verify(authService, never()).registerVerified(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("UTC038 accountType=BUSINESS_OWNER → partner account created with BUSINESS_OWNER")
+    void partnerAccountType_createsPartner() {
+      when(otpService.consume("ticket-2", EmailOtp.REGISTER)).thenReturn("partner@gmail.com");
+      CompleteRegistrationRequest request =
+          new CompleteRegistrationRequest(
+              "ticket-2", " Chủ Quán ", "Abc@1234", "BUSINESS_OWNER");
+      assertThat(messages(request)).isEmpty();
+
+      service.completeRegistration(request);
+
+      verify(authService)
+          .registerVerified("Chủ Quán", "partner@gmail.com", "Abc@1234", RoleName.BUSINESS_OWNER);
+    }
+
+    @Test
+    @DisplayName("UTC039 accountType=\"ADMIN\" → 400 (validation)")
+    void invalidAccountType_invalid() {
+      CompleteRegistrationRequest request =
+          new CompleteRegistrationRequest("ticket-2", "Chủ Quán", "Abc@1234", "ADMIN");
+      assertThat(messages(request))
+          .containsExactly("accountType phải là TRAVELLER hoặc BUSINESS_OWNER");
     }
   }
 

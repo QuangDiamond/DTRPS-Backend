@@ -171,4 +171,18 @@ class GoogleSignInServiceTest {
     assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT);
     assertThat(e.getMessage()).isEqualTo("Vui lòng bấm Tiếp tục với Google thêm lần nữa");
   }
+
+  @Test
+  @DisplayName("UTC046 Email of a BUSINESS_OWNER account → 403 wrong portal")
+  void partner_forbidden() {
+    googleSays(true);
+    when(users.findByEmail(EMAIL)).thenReturn(Optional.of(user(12, "ACTIVE", "BUSINESS_OWNER")));
+
+    ApiException e = error();
+
+    assertThat(e.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+    assertThat(e.getMessage())
+        .isEqualTo("Đây là tài khoản Đối tác. Vui lòng đăng nhập tại cổng Đối tác.");
+    verify(tokenService, never()).issue(any());
+  }
 }

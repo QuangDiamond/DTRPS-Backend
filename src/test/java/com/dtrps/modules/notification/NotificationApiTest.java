@@ -42,7 +42,7 @@ class NotificationApiTest extends ApiTestBase {
   @Test
   @DisplayName("partner submissions notify admins; admin decisions notify the partner")
   void reviewFlow_createsNotifications() throws Exception {
-    String partner = travellerToken();
+    String partner = partnerToken();
     String admin = adminToken();
     String taxCode =
         String.valueOf(ThreadLocalRandom.current().nextLong(1_000_000_000L, 9_999_999_999L));

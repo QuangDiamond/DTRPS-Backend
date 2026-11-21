@@ -2,6 +2,7 @@ package com.dtrps.modules.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record LoginRequest(
@@ -10,4 +11,13 @@ public record LoginRequest(
         @Size(max = 255, message = "Email quá dài")
         String email,
     @NotBlank(message = "Vui lòng nhập mật khẩu") @Size(max = 256, message = "Mật khẩu quá dài")
-        String password) {}
+        String password,
+    /** "TRAVELLER" hoặc "PARTNER" — null nghĩa là không kiểm tra cổng (backward compat) */
+    @Pattern(regexp = "TRAVELLER|PARTNER", message = "portal phải là TRAVELLER hoặc PARTNER")
+        String portal) {
+
+  /** Không chỉ định cổng (trang admin, test cũ). */
+  public LoginRequest(String email, String password) {
+    this(email, password, null);
+  }
+}

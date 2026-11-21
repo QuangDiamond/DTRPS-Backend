@@ -42,7 +42,7 @@ class ListingRevisionApiTest extends ApiTestBase {
 
   /** An ACTIVE business; approvePlace = true also publishes its place. */
   private String owner(boolean approvePlace) throws Exception {
-    String token = travellerToken();
+    String token = partnerToken();
     String admin = adminToken();
     String taxCode =
         String.valueOf(ThreadLocalRandom.current().nextLong(1_000_000_000L, 9_999_999_999L));

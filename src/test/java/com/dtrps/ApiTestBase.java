@@ -5,6 +5,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
+import com.dtrps.modules.auth.service.AuthService;
+import com.dtrps.modules.user.entity.RoleName;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
@@ -22,6 +24,7 @@ public abstract class ApiTestBase extends IntegrationTestBase {
 
   @Autowired protected MockMvc mockMvc;
   @Autowired protected ObjectMapper objectMapper;
+  @Autowired protected AuthService authService;
 
   protected static String uniqueEmail() {
     return "user-" + UUID.randomUUID() + "@dtrps.test";
@@ -30,6 +33,17 @@ public abstract class ApiTestBase extends IntegrationTestBase {
   /** Registers a new traveller and returns the access token. */
   protected String travellerToken() throws Exception {
     return session(uniqueEmail()).get("accessToken").asText();
+  }
+
+  /** Registers a new business owner (partner) and returns the access token. */
+  protected String partnerToken() throws Exception {
+    return partnerSession(uniqueEmail()).get("accessToken").asText();
+  }
+
+  /** Registers a new business owner (partner) and returns the whole auth response. */
+  protected JsonNode partnerSession(String email) {
+    return objectMapper.valueToTree(
+        authService.registerVerified("Nam", email, PASSWORD, RoleName.BUSINESS_OWNER));
   }
 
   /** Registers a new traveller and returns the whole auth response. */

@@ -12,4 +12,15 @@ public record CompleteRegistrationRequest(
         String name,
     @NotBlank(message = "Vui lòng nhập mật khẩu")
         @Pattern(regexp = PasswordPolicy.REGEX, message = PasswordPolicy.MESSAGE)
-        String password) {}
+        String password,
+    /** "TRAVELLER" (mặc định) hoặc "BUSINESS_OWNER" — xác định loại tài khoản tạo ra */
+    @Pattern(
+            regexp = "TRAVELLER|BUSINESS_OWNER",
+            message = "accountType phải là TRAVELLER hoặc BUSINESS_OWNER")
+        String accountType) {
+
+  /** Đăng ký du khách (giữ chữ ký cũ cho code/test đang dùng). */
+  public CompleteRegistrationRequest(String ticket, String name, String password) {
+    this(ticket, name, password, null);
+  }
+}

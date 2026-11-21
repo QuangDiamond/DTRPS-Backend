@@ -19,7 +19,7 @@ class AdminPlaceApiTest extends ApiTestBase {
   /** A partner place with two photos; returns its unique name. */
   private String partnerPlace(boolean approve) throws Exception {
     String name = "Kho POI " + UUID.randomUUID().toString().substring(0, 8);
-    String token = travellerToken();
+    String token = partnerToken();
     String admin = adminToken();
     String taxCode =
         String.valueOf(ThreadLocalRandom.current().nextLong(1_000_000_000L, 9_999_999_999L));
