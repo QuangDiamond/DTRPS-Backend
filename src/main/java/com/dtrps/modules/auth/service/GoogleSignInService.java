@@ -50,12 +50,27 @@ public class GoogleSignInService {
     this.auditService = auditService;
   }
 
+  /** Web: access token từ cửa sổ đăng nhập Google. */
   @Transactional
   public GoogleSignInResponse signIn(String accessToken) {
+    requireConfigured();
+    return complete(verifier.verify(accessToken));
+  }
+
+  /** App mobile: ID token từ Google Sign-In SDK (aud = Client ID web, giống token của web). */
+  @Transactional
+  public GoogleSignInResponse signInWithIdToken(String idToken) {
+    requireConfigured();
+    return complete(verifier.verifyIdToken(idToken));
+  }
+
+  private void requireConfigured() {
     if (!properties.configured()) {
       throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, NOT_CONFIGURED);
     }
-    GoogleAccount account = verifier.verify(accessToken);
+  }
+
+  private GoogleSignInResponse complete(GoogleAccount account) {
     if (!account.emailVerified()) {
       throw new ApiException(HttpStatus.UNAUTHORIZED, EMAIL_NOT_VERIFIED);
     }

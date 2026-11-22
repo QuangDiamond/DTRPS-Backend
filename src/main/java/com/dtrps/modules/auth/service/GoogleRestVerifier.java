@@ -73,4 +73,41 @@ public class GoogleRestVerifier implements GoogleTokenVerifier {
       throw new ApiException(HttpStatus.BAD_GATEWAY, UNAVAILABLE);
     }
   }
+
+  /**
+   * ID token từ app mobile: {@code tokeninfo} kiểm tra chữ ký, hạn dùng và trả về các claim.
+   * Chỉ nhận token có {@code aud} là Client ID web và do Google phát hành.
+   */
+  @Override
+  public GoogleAccount verifyIdToken(String idToken) {
+    try {
+      JsonNode info =
+          restClient
+              .get()
+              .uri(TOKEN_INFO + "?id_token={token}", idToken)
+              .retrieve()
+              .body(JsonNode.class);
+      if (info == null
+          || !properties.clientId().equals(info.path("aud").asText())
+          || !ISSUERS.contains(info.path("iss").asText())
+          || info.path("email").asText().isBlank()) {
+        throw new ApiException(HttpStatus.UNAUTHORIZED, INVALID);
+      }
+      // tokeninfo trả email_verified dạng chuỗi "true"/"false"
+      boolean verified = "true".equalsIgnoreCase(info.path("email_verified").asText());
+      return new GoogleAccount(
+          info.path("email").asText(),
+          verified,
+          info.path("name").asText(null),
+          info.path("picture").asText(null));
+    } catch (HttpClientErrorException e) {
+      throw new ApiException(HttpStatus.UNAUTHORIZED, INVALID);
+    } catch (RestClientException e) {
+      log.warn("Không gọi được Google để kiểm tra ID token", e);
+      throw new ApiException(HttpStatus.BAD_GATEWAY, UNAVAILABLE);
+    }
+  }
+
+  private static final java.util.Set<String> ISSUERS =
+      java.util.Set.of("accounts.google.com", "https://accounts.google.com");
 }

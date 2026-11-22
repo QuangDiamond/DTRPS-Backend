@@ -14,9 +14,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class PlaceScorer {
 
-    private static final double SEMANTIC_WEIGHT = 0.65;
+    private static final double SEMANTIC_WEIGHT = 0.60;
     private static final double CATEGORY_WEIGHT = 0.20;
-    private static final double BUDGET_WEIGHT = 0.15;
+    private static final double BUDGET_WEIGHT = 0.20;
 
     // Cosine thực tế giữa câu nhu cầu và mô tả địa điểm nằm khoảng 0,28–0,55
     // (text-embedding-3-small, văn bản tiếng Việt), nên quy đổi 0,25 → 0 và 0,60 → 1.

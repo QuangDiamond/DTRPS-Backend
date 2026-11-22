@@ -185,4 +185,31 @@ class GoogleSignInServiceTest {
         .isEqualTo("Đây là tài khoản Đối tác. Vui lòng đăng nhập tại cổng Đối tác.");
     verify(tokenService, never()).issue(any());
   }
+
+  @Test
+  @DisplayName("Mobile ID token → cùng luồng đăng nhập như web (tạo TRAVELLER nếu email mới)")
+  void idToken_fromMobile_createsTraveller() {
+    when(verifier.verifyIdToken("google-id-token"))
+        .thenReturn(new GoogleAccount("A@Gmail.com", true, "Nguyễn Văn A", PICTURE));
+    User created = user(21, "ACTIVE", "TRAVELLER");
+    when(userService.createUser("Nguyễn Văn A", EMAIL, null, RoleName.TRAVELLER)).thenReturn(created);
+
+    GoogleSignInResponse response = service.signInWithIdToken("google-id-token");
+
+    assertThat(response.newAccount()).isTrue();
+    verify(verifier, never()).verify(anyString());
+    verify(auditService).record(21L, "REGISTER_GOOGLE", "User", 21L);
+  }
+
+  @Test
+  @DisplayName("Mobile ID token của tài khoản đối tác → 403 như web")
+  void idToken_partnerAccount_forbidden() {
+    when(verifier.verifyIdToken("google-id-token"))
+        .thenReturn(new GoogleAccount(EMAIL, true, "Đối tác", null));
+    when(users.findByEmail(EMAIL)).thenReturn(Optional.of(user(30, "ACTIVE", "BUSINESS_OWNER")));
+
+    ApiException e = catchThrowableOfType(() -> service.signInWithIdToken("google-id-token"), ApiException.class);
+
+    assertThat(e.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+  }
 }
