@@ -2,10 +2,13 @@ package com.dtrps.modules.maps.controller;
 
 import com.dtrps.modules.maps.dto.AddressSuggestion;
 import com.dtrps.modules.maps.dto.GeoLocation;
+import com.dtrps.modules.maps.dto.NearbyPlace;
 import com.dtrps.modules.maps.dto.RouteResponse;
 import com.dtrps.modules.maps.service.MapService;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -53,6 +56,22 @@ public class MapController {
       @RequestParam @DecimalMin("-90") @DecimalMax("90") double lat,
       @RequestParam @DecimalMin("-180") @DecimalMax("180") double lng) {
     return mapService.reverse(lat, lng);
+  }
+
+  /** Tìm tiện ích gần vị trí hiện tại (vd. cây xăng, ATM, quán ăn) qua Goong. */
+  @GetMapping("/nearby")
+  public List<NearbyPlace> nearby(
+      @RequestParam @DecimalMin("-90") @DecimalMax("90") double lat,
+      @RequestParam @DecimalMin("-180") @DecimalMax("180") double lng,
+      @RequestParam(defaultValue = "cây xăng")
+          @NotBlank(message = "Vui lòng nhập từ khóa tìm kiếm")
+          @Size(min = 2, max = 100, message = "Từ khóa tìm kiếm từ 2 đến 100 ký tự")
+          String keyword,
+      @RequestParam(defaultValue = "5")
+          @Min(value = 1, message = "Bán kính tối thiểu 1 km")
+          @Max(value = 30, message = "Bán kính tối đa 30 km")
+          int radius) {
+    return mapService.nearby(lat, lng, keyword, radius);
   }
 
   /** {@code vehicle}: car (default), bike, taxi, truck or hd. */

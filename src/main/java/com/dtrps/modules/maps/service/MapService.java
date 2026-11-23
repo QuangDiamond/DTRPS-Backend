@@ -3,10 +3,12 @@ package com.dtrps.modules.maps.service;
 import com.dtrps.exception.ApiException;
 import com.dtrps.modules.maps.dto.AddressSuggestion;
 import com.dtrps.modules.maps.dto.GeoLocation;
+import com.dtrps.modules.maps.dto.NearbyPlace;
 import com.dtrps.modules.maps.dto.RouteResponse;
 import com.dtrps.modules.maps.dto.RouteStep;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class MapService {
   private static final int SUGGESTION_LIMIT = 6;
+  private static final int NEARBY_LIMIT = 5;
   private static final String PLACE_NOT_FOUND = "Không tìm thấy địa điểm trên bản đồ";
   private static final String ADDRESS_NOT_FOUND = "Không tìm thấy địa chỉ cho vị trí này";
   private static final String NO_ROUTE = "Không tìm được đường đi giữa hai điểm";
@@ -74,7 +77,50 @@ public class MapService {
     return new GeoLocation(found.placeId(), found.name(), found.address(), latitude, longitude);
   }
 
-  /** Best route; {@code vehicle} is one of car, bike, taxi, truck, hd (Goong's values). */
+  /** Tìm các địa điểm tiện ích (cây xăng, ATM, quán ăn...) gần vị trí hiện tại qua Goong. */
+  public List<NearbyPlace> nearby(
+      double latitude, double longitude, String keyword, int radiusKm) {
+    Map<String, String> params = new LinkedHashMap<>();
+    params.put("input", keyword.trim());
+    params.put("location", point(latitude, longitude));
+    params.put("radius", String.valueOf(radiusKm));
+    params.put("limit", String.valueOf(NEARBY_LIMIT));
+    params.put("more_compound", "true");
+
+    JsonNode predictions = goong.get("/Place/AutoComplete", params).path("predictions");
+    List<NearbyPlace> results = new ArrayList<>();
+    for (JsonNode prediction : predictions) {
+      if (results.size() >= NEARBY_LIMIT) {
+        break;
+      }
+      String placeId = prediction.path("place_id").asText("");
+      if (placeId.isBlank()) {
+        continue;
+      }
+      try {
+        GeoLocation detail = place(placeId);
+        long meters =
+            Math.round(GeoDistance.meters(latitude, longitude, detail.latitude(), detail.longitude()));
+        // Lọc bớt kết quả ở quá xa ngoài bán kính yêu cầu (cộng thêm biên độ nhỏ cho Goong)
+        if (meters > radiusKm * 1500L) {
+          continue;
+        }
+        String name =
+            detail.name() != null && !detail.name().isBlank()
+                ? detail.name()
+                : prediction.path("structured_formatting").path("main_text").asText(detail.address());
+        results.add(
+            new NearbyPlace(
+                placeId, name, detail.address(), detail.latitude(), detail.longitude(), meters));
+      } catch (ApiException ignored) {
+        // Bỏ qua 1 điểm lỗi chi tiết để không làm hỏng cả danh sách lân cận
+      }
+    }
+    results.sort(Comparator.comparingLong(NearbyPlace::distanceMeters));
+    return results;
+  }
+
+  /** Best route (+ alternative routes when Goong returns them); {@code vehicle} is car/bike/taxi/truck/hd. */
   public RouteResponse directions(
       double fromLatitude,
       double fromLongitude,
@@ -85,11 +131,27 @@ public class MapService {
     params.put("origin", point(fromLatitude, fromLongitude));
     params.put("destination", point(toLatitude, toLongitude));
     params.put("vehicle", vehicle.toLowerCase(Locale.ROOT));
+    params.put("alternatives", "true");
     JsonNode routes = goong.get("/Direction", params).path("routes");
     if (!routes.isArray() || routes.isEmpty()) {
       throw new ApiException(HttpStatus.NOT_FOUND, NO_ROUTE);
     }
-    JsonNode route = routes.get(0);
+    RouteResponse primary = parseRoute(routes.get(0), List.of());
+    List<RouteResponse> alternatives = new ArrayList<>();
+    for (int i = 1; i < routes.size(); i++) {
+      alternatives.add(parseRoute(routes.get(i), List.of()));
+    }
+    return new RouteResponse(
+        primary.distanceMeters(),
+        primary.durationSeconds(),
+        primary.distanceText(),
+        primary.durationText(),
+        primary.polyline(),
+        primary.steps(),
+        alternatives);
+  }
+
+  private static RouteResponse parseRoute(JsonNode route, List<RouteResponse> alternatives) {
     long meters = 0;
     long seconds = 0;
     List<RouteStep> steps = new ArrayList<>();
@@ -110,7 +172,8 @@ public class MapService {
         firstLeg.path("distance").path("text").asText(null),
         firstLeg.path("duration").path("text").asText(null),
         route.path("overview_polyline").path("points").asText(""),
-        steps);
+        steps,
+        alternatives);
   }
 
   /** One Goong step, or null when it has no usable start/end point. */
