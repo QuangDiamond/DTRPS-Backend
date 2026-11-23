@@ -21,6 +21,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +48,7 @@ public class WeatherService {
   private final OpenMeteoGateway gateway;
   private final WeatherProperties properties;
   private final Clock clock;
+  private final JdbcTemplate jdbcTemplate;
 
   public WeatherService(
       PlaceRepository placeRepository,
@@ -54,13 +56,15 @@ public class WeatherService {
       WeatherSummaryRepository summaryRepository,
       OpenMeteoGateway gateway,
       WeatherProperties properties,
-      Clock clock) {
+      Clock clock,
+      JdbcTemplate jdbcTemplate) {
     this.placeRepository = placeRepository;
     this.forecastRepository = forecastRepository;
     this.summaryRepository = summaryRepository;
     this.gateway = gateway;
     this.properties = properties;
     this.clock = clock;
+    this.jdbcTemplate = jdbcTemplate;
   }
 
   @Transactional
@@ -162,7 +166,39 @@ public class WeatherService {
     List<WeatherForecast> rows = toRows(place, response);
     forecastRepository.deleteByPlaceId(place.getPlaceId());
     forecastRepository.flush();
-    forecastRepository.saveAll(rows);
+    bulkInsert(rows);
+  }
+
+  /**
+   * Raw JDBC batch insert instead of {@code forecastRepository.saveAll(rows)}: the entity's ID is
+   * {@code GenerationType.IDENTITY}, which forces Hibernate to send one INSERT per row and wait
+   * for its generated key before the next — against the remote DB this turned ~168 rows (7 days x
+   * 24h) into ~20s of sequential round trips, blowing past the frontend's request timeout on every
+   * first-time view of a place. A single JDBC batch sends them all in one round trip.
+   */
+  private void bulkInsert(List<WeatherForecast> rows) {
+    if (rows.isEmpty()) return;
+    String sql =
+        "INSERT INTO weather_forecasts "
+            + "(place_id, forecast_date, forecast_time, temperature, weather_code, "
+            + "precipitation_probability, precipitation, wind_speed) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    List<Object[]> args =
+        rows.stream()
+            .map(
+                row ->
+                    new Object[] {
+                      row.getPlace().getPlaceId(),
+                      row.getForecastDate(),
+                      row.getForecastTime(),
+                      row.getTemperature(),
+                      row.getWeatherCode(),
+                      row.getPrecipitationProbability(),
+                      row.getPrecipitation(),
+                      row.getWindSpeed()
+                    })
+            .toList();
+    jdbcTemplate.batchUpdate(sql, args);
   }
 
   private static List<WeatherForecast> toRows(Place place, OpenMeteoDtos.ForecastResponse response) {

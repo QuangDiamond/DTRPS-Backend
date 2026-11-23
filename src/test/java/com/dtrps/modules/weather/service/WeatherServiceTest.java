@@ -30,6 +30,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /** GBR-49 (cache 1h), GBR-50 (stale fallback / 503), GBR-47 (ngoài 7 ngày → notAvailable). */
 @ExtendWith(MockitoExtension.class)
@@ -44,6 +45,7 @@ class WeatherServiceTest {
   @Mock private WeatherForecastRepository forecastRepository;
   @Mock private WeatherSummaryRepository summaryRepository;
   @Mock private OpenMeteoGateway gateway;
+  @Mock private JdbcTemplate jdbcTemplate;
 
   private WeatherService service;
   private Place place;
@@ -52,7 +54,13 @@ class WeatherServiceTest {
   void setUp() {
     service =
         new WeatherService(
-            placeRepository, forecastRepository, summaryRepository, gateway, PROPERTIES, CLOCK);
+            placeRepository,
+            forecastRepository,
+            summaryRepository,
+            gateway,
+            PROPERTIES,
+            CLOCK,
+            jdbcTemplate);
     place = new Place();
     place.setPlaceId(PLACE_ID);
     place.setLatitude(21.0285);
