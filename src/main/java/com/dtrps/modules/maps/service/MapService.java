@@ -120,17 +120,18 @@ public class MapService {
     return results;
   }
 
-  /** Best route (+ alternative routes when Goong returns them); {@code vehicle} is car/bike/taxi/truck/hd. */
+  /** Best route (+ alternative routes); Goong v1 chỉ trả 1 tuyến nên BE tự sinh thêm tuyến thay thế bằng waypoint lệch hai bên. */
   public RouteResponse directions(
       double fromLatitude,
       double fromLongitude,
       double toLatitude,
       double toLongitude,
       String vehicle) {
+    String normalizedVehicle = vehicle.toLowerCase(Locale.ROOT);
     Map<String, String> params = new LinkedHashMap<>();
     params.put("origin", point(fromLatitude, fromLongitude));
     params.put("destination", point(toLatitude, toLongitude));
-    params.put("vehicle", vehicle.toLowerCase(Locale.ROOT));
+    params.put("vehicle", normalizedVehicle);
     params.put("alternatives", "true");
     JsonNode routes = goong.get("/Direction", params).path("routes");
     if (!routes.isArray() || routes.isEmpty()) {
@@ -140,6 +141,12 @@ public class MapService {
     List<RouteResponse> alternatives = new ArrayList<>();
     for (int i = 1; i < routes.size(); i++) {
       alternatives.add(parseRoute(routes.get(i), List.of()));
+    }
+    // Goong /Direction hiện chỉ trả 1 route → tự tính thêm tối đa 2 tuyến thay thế qua waypoint lệch trái/phải
+    if (alternatives.isEmpty() && primary.distanceMeters() >= 2_000) {
+      alternatives.addAll(
+          buildWaypointAlternatives(
+              fromLatitude, fromLongitude, toLatitude, toLongitude, normalizedVehicle, primary));
     }
     return new RouteResponse(
         primary.distanceMeters(),
@@ -151,11 +158,100 @@ public class MapService {
         alternatives);
   }
 
+  /**
+   * Tạo tối đa 2 tuyến thay thế bằng cách đi qua 1 điểm trung gian lệch vuông góc sang trái/phải
+   * đoạn thẳng nối điểm đầu – điểm cuối (~12% khoảng cách, kẹp trong 0.6 km – 12 km).
+   */
+  private List<RouteResponse> buildWaypointAlternatives(
+      double fromLat,
+      double fromLng,
+      double toLat,
+      double toLng,
+      String vehicle,
+      RouteResponse primary) {
+    double straightMeters = GeoDistance.meters(fromLat, fromLng, toLat, toLng);
+    if (straightMeters < 1_500) {
+      return List.of();
+    }
+    double offsetMeters = Math.max(600.0, Math.min(12_000.0, straightMeters * 0.12));
+    double midLat = (fromLat + toLat) / 2.0;
+    double midLng = (fromLng + toLng) / 2.0;
+    double cosLat = Math.max(0.2, Math.cos(Math.toRadians(midLat)));
+    // Vector đơn vị theo mét từ đầu tới cuối
+    double dy = (toLat - fromLat) * 111_320.0;
+    double dx = (toLng - fromLng) * 111_320.0 * cosLat;
+    double len = Math.hypot(dx, dy);
+    if (len < 1.0) {
+      return List.of();
+    }
+    // Vector vuông góc chuẩn hóa
+    double perpX = -dy / len;
+    double perpY = dx / len;
+
+    List<RouteResponse> results = new ArrayList<>();
+    for (int side : new int[] {1, -1}) {
+      double viaLat = midLat + (side * perpY * offsetMeters) / 111_320.0;
+      double viaLng = midLng + (side * perpX * offsetMeters) / (111_320.0 * cosLat);
+      try {
+        Map<String, String> altParams = new LinkedHashMap<>();
+        altParams.put("origin", point(fromLat, fromLng));
+        altParams.put("destination", point(viaLat, viaLng) + ";" + point(toLat, toLng));
+        altParams.put("vehicle", vehicle);
+        JsonNode altRoutes = goong.get("/Direction", altParams).path("routes");
+        if (!altRoutes.isArray() || altRoutes.isEmpty()) {
+          continue;
+        }
+        RouteResponse candidate = parseRoute(altRoutes.get(0), List.of());
+        if (isDistinctReasonableAlternative(candidate, primary, results)) {
+          results.add(candidate);
+        }
+      } catch (ApiException ignored) {
+        // Nếu 1 hướng bị sông/biển không có đường thì bỏ qua hướng đó
+      }
+    }
+    results.sort(Comparator.comparingLong(RouteResponse::durationSeconds));
+    return results;
+  }
+
+  private static boolean isDistinctReasonableAlternative(
+      RouteResponse candidate, RouteResponse primary, List<RouteResponse> existing) {
+    if (candidate.polyline() == null || candidate.polyline().isBlank()) {
+      return false;
+    }
+    // Không nhận tuyến vòng quá xa (> 1.55x tuyến chính)
+    if (candidate.distanceMeters() > primary.distanceMeters() * 1.55) {
+      return false;
+    }
+    if (candidate.polyline().equals(primary.polyline())) {
+      return false;
+    }
+    // Khác biệt tối thiểu ~2% quãng đường hoặc thời gian để tránh trùng tuyến
+    boolean differsFromPrimary =
+        Math.abs(candidate.distanceMeters() - primary.distanceMeters())
+                >= Math.max(200, primary.distanceMeters() * 0.02)
+            || Math.abs(candidate.durationSeconds() - primary.durationSeconds()) >= 60;
+    if (!differsFromPrimary) {
+      return false;
+    }
+    for (RouteResponse other : existing) {
+      if (candidate.polyline().equals(other.polyline())) {
+        return false;
+      }
+      if (Math.abs(candidate.distanceMeters() - other.distanceMeters()) < 250
+          && Math.abs(candidate.durationSeconds() - other.durationSeconds()) < 60) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private static RouteResponse parseRoute(JsonNode route, List<RouteResponse> alternatives) {
     long meters = 0;
     long seconds = 0;
+    int legCount = 0;
     List<RouteStep> steps = new ArrayList<>();
     for (JsonNode leg : route.path("legs")) {
+      legCount++;
       meters += leg.path("distance").path("value").asLong();
       seconds += leg.path("duration").path("value").asLong();
       for (JsonNode step : leg.path("steps")) {
@@ -166,14 +262,39 @@ public class MapService {
       }
     }
     JsonNode firstLeg = route.path("legs").path(0);
+    String distanceText =
+        legCount > 1
+            ? formatDistanceVi(meters)
+            : firstLeg.path("distance").path("text").asText(formatDistanceVi(meters));
+    String durationText =
+        legCount > 1
+            ? formatDurationVi(seconds)
+            : firstLeg.path("duration").path("text").asText(formatDurationVi(seconds));
     return new RouteResponse(
         meters,
         seconds,
-        firstLeg.path("distance").path("text").asText(null),
-        firstLeg.path("duration").path("text").asText(null),
+        distanceText,
+        durationText,
         route.path("overview_polyline").path("points").asText(""),
         steps,
         alternatives);
+  }
+
+  private static String formatDistanceVi(long meters) {
+    if (meters >= 1000) {
+      return String.format(Locale.US, "%.1f km", meters / 1000.0);
+    }
+    return meters + " m";
+  }
+
+  private static String formatDurationVi(long seconds) {
+    long totalMinutes = Math.max(1, Math.round(seconds / 60.0));
+    if (totalMinutes >= 60) {
+      long hours = totalMinutes / 60;
+      long mins = totalMinutes % 60;
+      return mins > 0 ? hours + " giờ " + mins + " phút" : hours + " giờ";
+    }
+    return totalMinutes + " phút";
   }
 
   /** One Goong step, or null when it has no usable start/end point. */
