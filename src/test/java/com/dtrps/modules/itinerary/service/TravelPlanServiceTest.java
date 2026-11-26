@@ -25,6 +25,7 @@ import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
 import com.dtrps.modules.poi.repository.PlacePriceRepository;
 import com.dtrps.modules.user.entity.User;
 import com.dtrps.modules.user.repository.UserRepository;
+import com.dtrps.modules.weather.service.WeatherNotificationService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -59,6 +60,7 @@ class TravelPlanServiceTest {
   @Mock private TripProgressRepository tripProgressRepository;
   @Mock private UserRepository userRepository;
   @Mock private PlaceCategoryRepository categoryRepository;
+  @Mock private WeatherNotificationService weatherNotificationService;
 
   private TravelPlanService service;
   private User owner;
@@ -76,7 +78,8 @@ class TravelPlanServiceTest {
             tripDayProgressRepository,
             tripProgressRepository,
             userRepository,
-            categoryRepository);
+            categoryRepository,
+            weatherNotificationService);
     owner = new User();
     owner.setUserId(OWNER_ID);
   }

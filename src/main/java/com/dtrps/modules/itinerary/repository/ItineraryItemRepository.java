@@ -68,4 +68,40 @@ public interface ItineraryItemRepository
             @Param("today") LocalDate today,
             @Param("limit") LocalDate limit
     );
+
+    // Hoạt động ngoài trời của lịch trình đang diễn ra/sắp đi, có thể rơi vào targetDate (ngày mai)
+    // — WeatherNotificationJob lọc lại chính xác ngày + cờ đã báo trong Java trước khi gửi.
+    @Query("""
+      SELECT i
+      FROM ItineraryItem i
+      WHERE i.day.itinerary.status = 'ACTIVE'
+        AND i.day.itinerary.plan.status IN ('PLANNED', 'IN_PROGRESS')
+        AND i.day.itinerary.plan.startDate <= :targetDate
+        AND i.day.itinerary.plan.endDate >= :targetDate
+        AND i.place.category.isOutdoor = true
+        AND i.startTime IS NOT NULL
+        AND i.endTime IS NOT NULL
+        AND (i.weatherNotifiedDate IS NULL OR i.weatherNotifiedDate <> :targetDate)
+      """)
+    List<ItineraryItem> findOutdoorCandidatesForWeatherNotification(
+            @Param("targetDate") LocalDate targetDate
+    );
+
+    // Như trên nhưng giới hạn đúng 1 kế hoạch — dùng để báo ngay khi kế hoạch vừa chuyển sang
+    // PLANNED sau 18h (xem WeatherNotificationService.checkPlanTomorrowIfLate), không cần đợi
+    // job 18h hôm sau (lúc đó đã trễ mất 1 ngày).
+    @Query("""
+      SELECT i
+      FROM ItineraryItem i
+      WHERE i.day.itinerary.plan.planId = :planId
+        AND i.day.itinerary.status = 'ACTIVE'
+        AND i.place.category.isOutdoor = true
+        AND i.startTime IS NOT NULL
+        AND i.endTime IS NOT NULL
+        AND (i.weatherNotifiedDate IS NULL OR i.weatherNotifiedDate <> :targetDate)
+      """)
+    List<ItineraryItem> findOutdoorCandidatesForPlan(
+            @Param("planId") Long planId,
+            @Param("targetDate") LocalDate targetDate
+    );
 }
