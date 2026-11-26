@@ -18,6 +18,7 @@ import com.dtrps.modules.poi.repository.PlaceCategoryRepository;
 import com.dtrps.modules.poi.repository.PlacePriceRepository;
 import com.dtrps.modules.user.entity.User;
 import com.dtrps.modules.user.repository.UserRepository;
+import com.dtrps.modules.weather.service.WeatherNotificationService;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -77,6 +78,7 @@ public class TravelPlanService {
     private final TripProgressRepository tripProgressRepository;
     private final UserRepository userRepository;
     private final PlaceCategoryRepository categoryRepository;
+    private final WeatherNotificationService weatherNotificationService;
 
     public TravelPlanService(
             TravelPlanRepository planRepository,
@@ -88,7 +90,8 @@ public class TravelPlanService {
             TripDayProgressRepository tripDayProgressRepository,
             TripProgressRepository tripProgressRepository,
             UserRepository userRepository,
-            PlaceCategoryRepository categoryRepository) {
+            PlaceCategoryRepository categoryRepository,
+            WeatherNotificationService weatherNotificationService) {
 
         this.planRepository = planRepository;
         this.planInterestRepository = planInterestRepository;
@@ -100,6 +103,7 @@ public class TravelPlanService {
         this.tripProgressRepository = tripProgressRepository;
         this.userRepository = userRepository;
         this.categoryRepository = categoryRepository;
+        this.weatherNotificationService = weatherNotificationService;
     }
 
     // =========================================================
@@ -322,7 +326,15 @@ public class TravelPlanService {
 
         plan.setStatus(newStatus);
 
-        return toResponse(planRepository.saveAndFlush(plan));
+        TravelPlanDtos.PlanResponse response = toResponse(planRepository.saveAndFlush(plan));
+
+        // Kế hoạch vừa được xác nhận (PLANNED) — nếu đã qua 18h thì báo ngay thời tiết xấu của
+        // ngày mai cho hoạt động ngoài trời, không đợi job 18h hôm sau (sẽ bị lệch mất ngày).
+        if (TravelPlanStatus.PLANNED.equals(newStatus)) {
+            weatherNotificationService.checkPlanTomorrowIfLate(planId);
+        }
+
+        return response;
     }
 
     // =========================================================

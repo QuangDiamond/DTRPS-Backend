@@ -15,6 +15,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import lombok.Getter;
 import lombok.Setter;
@@ -99,4 +100,8 @@ public class ItineraryItem {
   @ColumnDefault("now()")
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt;
+
+  /** Ngày (thực tế của hoạt động) đã bắn cảnh báo thời tiết xấu trước 1 hôm — chặn báo lặp lại. */
+  @Column(name = "weather_notified_date")
+  private LocalDate weatherNotifiedDate;
 }
