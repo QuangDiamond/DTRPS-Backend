@@ -53,6 +53,12 @@ public class TripProgressService {
     private final TripProgressRepository progressRepository;
     private final TripDayProgressRepository dayProgressRepository;
     private final ActivityProgressRepository activityProgressRepository;
+    private TripReminderService tripReminderService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setTripReminderService(TripReminderService tripReminderService) {
+        this.tripReminderService = tripReminderService;
+    }
 
     public TripProgressService(
             TravelPlanRepository planRepository,
@@ -409,6 +415,10 @@ public class TripProgressService {
             plan.setStatus(TravelPlanStatus.COMPLETED);
 
             planRepository.saveAndFlush(plan);
+
+            if (tripReminderService != null) {
+                tripReminderService.remindTripReview(plan);
+            }
         }
 
         return toResponse(plan, itinerary, progress);

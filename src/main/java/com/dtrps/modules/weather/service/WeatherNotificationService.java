@@ -158,13 +158,18 @@ public class WeatherNotificationService {
             + "\" dự báo "
             + worst.condition().toLowerCase(java.util.Locale.forLanguageTag("vi"))
             + ", có thể ảnh hưởng hoạt động ngoài trời đã lên lịch.";
+    Long planId = day.getItinerary().getPlan().getPlanId();
+    String link =
+        planId != null
+            ? "/trips/itinerary/day/" + day.getDayNumber() + "?planId=" + planId
+            : "/trips/itinerary/day/" + day.getDayNumber();
     notifications.notifyUser(
         userId,
         new Notice(
             type,
             title,
             message,
-            "/trips/itinerary/day/" + day.getDayNumber(),
+            link,
             Map.of(
                 "itemId", item.getItemId(),
                 "placeId", item.getPlace().getPlaceId(),

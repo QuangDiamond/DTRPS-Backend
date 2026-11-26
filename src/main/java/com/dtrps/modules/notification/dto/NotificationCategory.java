@@ -14,6 +14,7 @@ public enum NotificationCategory {
   LISTING(List.of("PARTNER_", "LISTING_", "REVISION_"), List.of()),
   ADS(List.of("AD_"), List.of()),
   TRIP(List.of("TRIP_"), List.of()),
+  WEATHER(List.of("WEATHER_"), List.of()),
   OTHER(List.of(), List.of());
 
   private final List<String> prefixes;

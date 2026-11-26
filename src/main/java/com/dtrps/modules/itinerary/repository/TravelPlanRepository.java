@@ -3,6 +3,7 @@ package com.dtrps.modules.itinerary.repository;
 
 import com.dtrps.modules.itinerary.entity.TravelPlan;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -31,6 +32,9 @@ public interface TravelPlanRepository
             Long planId,
             Long userId
     );
+
+    // Tìm các kế hoạch theo trạng thái và ngày khởi hành (dùng cho job nhắc lịch trình)
+    List<TravelPlan> findByStatusAndStartDate(String status, LocalDate startDate);
 
     // ---- Xóa kế hoạch ----
     // DB không có ON DELETE CASCADE, nên xóa dữ liệu con theo thứ tự từ dưới lên
