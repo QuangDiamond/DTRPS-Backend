@@ -13,8 +13,10 @@ public enum NotificationCategory {
   REVIEW(List.of("TRIP_FEEDBACK_"), List.of("REVIEW")),
   LISTING(List.of("PARTNER_", "LISTING_", "REVISION_"), List.of()),
   ADS(List.of("AD_"), List.of()),
+  // Trước TRIP: cảnh báo thời tiết của chuyến đi đặt tên TRIP_WEATHER_*, phải khớp WEATHER trước
+  // khi TRIP kịp nhận theo tiền tố TRIP_.
+  WEATHER(List.of("WEATHER_", "TRIP_WEATHER_"), List.of()),
   TRIP(List.of("TRIP_"), List.of()),
-  WEATHER(List.of("WEATHER_"), List.of()),
   OTHER(List.of(), List.of());
 
   private final List<String> prefixes;
