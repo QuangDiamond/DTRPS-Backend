@@ -121,6 +121,15 @@ public class TravelPlan {
     @Column(name = "status", nullable = false, length = 30)
     private String status = "DRAFT";
 
+    // Số lần AI đã tạo/tạo lại lịch trình cho kế hoạch này.
+    // Chỉ tăng khi AI generate; sửa tay itinerary_items/itinerary_days không tính.
+    @ColumnDefault("0")
+    @Column(name = "ai_generation_count", nullable = false)
+    private Integer aiGenerationCount = 0;
+
+    @Column(name = "last_ai_generated_at")
+    private Instant lastAiGeneratedAt;
+
     @CreationTimestamp
     @ColumnDefault("now()")
     @Column(name = "created_at", nullable = false)
