@@ -15,7 +15,9 @@ import com.dtrps.modules.itinerary.repository.ItineraryItemRepository;
 import com.dtrps.modules.itinerary.repository.TravelPlanRepository;
 import com.dtrps.modules.itinerary.repository.TripProgressRepository;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ItineraryService {
+
+    private static final ZoneId VIETNAM = ZoneId.of("Asia/Ho_Chi_Minh");
+
+    // Giới hạn số lần AI được tạo/tạo lại lịch trình cho 1 kế hoạch, mỗi ngày (giờ VN), tránh spam AI.
+    private static final int MAX_AI_GENERATIONS_PER_DAY = 5;
 
     private final TravelPlanRepository planRepository;
     private final ItineraryRepository itineraryRepository;
@@ -82,6 +89,9 @@ public class ItineraryService {
         // Không tạo phiên bản mới khi chuyến đi đã bắt đầu.
         // Kiểm tra khi đã khóa TravelPlan để tránh tranh chấp với startDay().
         ensureTripNotStarted(plan);
+
+        // Chặn spam AI: giới hạn số lần AI được tạo/tạo lại lịch trình cho 1 kế hoạch.
+        ensureAiGenerationLimitNotExceeded(plan);
 
         LocalDate startDate = plan.getStartDate();
         LocalDate endDate = plan.getEndDate();
@@ -216,6 +226,19 @@ public class ItineraryService {
 
         itemRepository.saveAllAndFlush(items);
 
+        // Chỉ tăng bộ đếm khi AI generate thành công; sửa tay không đi qua đường này.
+        // Bộ đếm reset theo ngày (giờ VN): qua ngày mới thì tính lại từ 1.
+        Instant now = Instant.now();
+        boolean sameDayAsLastGeneration =
+                plan.getLastAiGeneratedAt() != null
+                        && isSameVietnamDay(plan.getLastAiGeneratedAt(), now);
+
+        plan.setAiGenerationCount(
+                sameDayAsLastGeneration ? plan.getAiGenerationCount() + 1 : 1
+        );
+        plan.setLastAiGeneratedAt(now);
+        planRepository.saveAndFlush(plan);
+
         return toResponse(itinerary, days, arranged.warnings());
     }
 
@@ -306,6 +329,33 @@ public class ItineraryService {
                     "Chuyến đi đã bắt đầu, không thể tạo lại lịch trình"
             );
         }
+    }
+
+    /**
+     * Chặn spam AI: mỗi kế hoạch chỉ được AI tạo/tạo lại lịch trình
+     * tối đa MAX_AI_GENERATIONS_PER_DAY lần trong 1 ngày (giờ VN).
+     * Sửa tay itinerary_items/itinerary_days không đi qua create() nên
+     * không tính vào giới hạn này. aiGenerationCount chỉ còn ý nghĩa cho
+     * ngày của lastAiGeneratedAt; sang ngày mới coi như chưa dùng lần nào.
+     */
+    private void ensureAiGenerationLimitNotExceeded(TravelPlan plan) {
+
+        boolean countAppliesToToday =
+                plan.getLastAiGeneratedAt() != null
+                        && isSameVietnamDay(plan.getLastAiGeneratedAt(), Instant.now());
+
+        if (countAppliesToToday
+                && plan.getAiGenerationCount() >= MAX_AI_GENERATIONS_PER_DAY) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "Đã đạt giới hạn " + MAX_AI_GENERATIONS_PER_DAY
+                            + " lần AI tạo lại lịch trình trong hôm nay cho kế hoạch này"
+            );
+        }
+    }
+
+    private static boolean isSameVietnamDay(Instant a, Instant b) {
+        return LocalDate.ofInstant(a, VIETNAM).isEqual(LocalDate.ofInstant(b, VIETNAM));
     }
 
     /**
