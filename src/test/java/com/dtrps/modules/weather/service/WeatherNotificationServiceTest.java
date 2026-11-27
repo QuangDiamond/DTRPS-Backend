@@ -3,6 +3,7 @@ package com.dtrps.modules.weather.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,7 +17,6 @@ import com.dtrps.modules.itinerary.repository.ItineraryItemRepository;
 import com.dtrps.modules.notification.dto.Notice;
 import com.dtrps.modules.notification.service.NotificationService;
 import com.dtrps.modules.poi.entity.Place;
-import com.dtrps.modules.poi.entity.PlaceCategory;
 import com.dtrps.modules.user.entity.User;
 import com.dtrps.modules.weather.config.WeatherProperties;
 import com.dtrps.modules.weather.dto.WeatherDtos;
@@ -25,213 +25,258 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 
-/** Cảnh báo trước 1 hôm cho hoạt động ngoài trời gặp thời tiết xấu (TYPE_SEVERE/TYPE_WARNING). */
-@ExtendWith(MockitoExtension.class)
 class WeatherNotificationServiceTest {
+
+  private static final ZoneId VN = ZoneId.of("Asia/Ho_Chi_Minh");
   private static final LocalDate TODAY = LocalDate.of(2026, 11, 26);
-  private static final LocalDate TOMORROW = TODAY.plusDays(1);
-  private static final Long ITEM_ID = 1L;
-  private static final Long PLAN_ID = 7L;
-  private static final Long USER_ID = 42L;
+  private static final LocalDate TOMORROW = LocalDate.of(2026, 11, 27);
 
-  @Mock private ItineraryItemRepository itemRepository;
-  @Mock private WeatherService weatherService;
-  @Mock private NotificationService notifications;
-
-  private static Clock clockAt(LocalTime time) {
-    return Clock.fixed(TODAY.atTime(time).toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+  private static Clock clockAt(int hour, int minute) {
+    Instant instant = TODAY.atTime(hour, minute).atZone(VN).toInstant();
+    return Clock.fixed(instant, VN);
   }
 
-  private WeatherNotificationService service(WeatherProperties properties, Clock clock) {
-    return new WeatherNotificationService(itemRepository, weatherService, properties, notifications, clock);
+  private static WeatherProperties props(boolean jobsEnabled) {
+    return new WeatherProperties(
+        "https://api.open-meteo.com", 60, 70, 5.0, List.of(95, 96, 99), jobsEnabled);
   }
 
-  private static WeatherProperties properties(boolean jobsEnabled) {
-    return new WeatherProperties(null, 60, 70, 7.6, List.of(65, 67, 82, 95, 96, 99), jobsEnabled);
-  }
-
-  private static ItineraryItem buildItem(
-      LocalTime start, LocalTime end, boolean outdoor, LocalDate notifiedDate) {
+  private static ItineraryItem item(Long itemId, Long planId, int dayNumber, LocalDate startDate) {
     User user = new User();
-    user.setUserId(USER_ID);
+    user.setUserId(42L);
 
     TravelPlan plan = new TravelPlan();
-    plan.setPlanId(PLAN_ID);
+    plan.setPlanId(planId);
     plan.setUser(user);
-    plan.setStartDate(TOMORROW); // ngày 1 của kế hoạch == ngày mai
-    plan.setStatus("PLANNED");
+    plan.setStartDate(startDate);
 
     Itinerary itinerary = new Itinerary();
     itinerary.setPlan(plan);
-    itinerary.setStatus("ACTIVE");
 
     ItineraryDay day = new ItineraryDay();
+    day.setDayNumber(dayNumber);
     day.setItinerary(itinerary);
-    day.setDayNumber(1);
-
-    PlaceCategory category = new PlaceCategory();
-    category.setIsOutdoor(outdoor);
 
     Place place = new Place();
     place.setPlaceId(100L);
-    place.setName("Chùa Hương");
-    place.setCategory(category);
+    place.setName("Bà Nà Hills");
 
     ItineraryItem item = new ItineraryItem();
-    item.setItemId(ITEM_ID);
+    item.setItemId(itemId);
     item.setDay(day);
     item.setPlace(place);
-    item.setStartTime(start);
-    item.setEndTime(end);
-    item.setWeatherNotifiedDate(notifiedDate);
+    item.setStartTime(LocalTime.of(9, 0));
+    item.setEndTime(LocalTime.of(12, 0));
     return item;
   }
 
+  private static WeatherDtos.WeatherResponse weatherWith(
+      List<WeatherDtos.HourlyForecast> hourly, List<LocalDate> notAvailable) {
+    return new WeatherDtos.WeatherResponse(
+        100L, List.of(), hourly, notAvailable, false, Instant.now());
+  }
+
   private static WeatherDtos.HourlyForecast hour(
-      LocalTime time, Integer weatherCode, int precipProb, double precipMm) {
+      LocalTime time, Integer code, Integer rainProb, Double rainMm, String condition) {
     return new WeatherDtos.HourlyForecast(
         TOMORROW,
         time,
-        BigDecimal.valueOf(28),
-        weatherCode,
-        "Giông bão",
-        precipProb,
-        BigDecimal.valueOf(precipMm),
-        BigDecimal.valueOf(10));
+        BigDecimal.valueOf(25.0),
+        code,
+        condition,
+        rainProb,
+        rainMm == null ? null : BigDecimal.valueOf(rainMm),
+        BigDecimal.valueOf(10.0));
   }
 
-  private static WeatherDtos.WeatherResponse response(List<WeatherDtos.HourlyForecast> hourly) {
-    return new WeatherDtos.WeatherResponse(100L, List.of(), hourly, List.of(), false, Instant.now());
-  }
-
-  // ===== checkAndNotify (dùng bởi job quét 18h) =====
+  // ===== checkPlanTomorrowIfLate =====
 
   @Test
-  void stormCodeSendsSevereNotificationAndMarksNotified() {
-    ItineraryItem item = buildItem(LocalTime.of(9, 0), LocalTime.of(11, 0), true, null);
-    WeatherNotificationService service = service(properties(true), clockAt(LocalTime.of(18, 0)));
-    when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
-    when(weatherService.forecast(item.getPlace(), TOMORROW, TOMORROW))
-        .thenReturn(response(List.of(hour(LocalTime.of(10, 0), 95, 80, 10))));
+  void checkPlanTomorrowIfLate_jobsDisabled_doesNothing() {
+    var repo = mock(ItineraryItemRepository.class);
+    var weather = mock(WeatherService.class);
+    var notices = mock(NotificationService.class);
+    var service =
+        new WeatherNotificationService(repo, weather, props(false), notices, clockAt(19, 0));
 
-    service.checkAndNotify(ITEM_ID, TOMORROW);
+    service.checkPlanTomorrowIfLate(10L);
 
-    ArgumentCaptor<Notice> notice = ArgumentCaptor.forClass(Notice.class);
-    verify(notifications).notifyUser(eq(USER_ID), notice.capture());
-    assertThat(notice.getValue().type()).isEqualTo(WeatherNotificationService.TYPE_SEVERE);
-    assertThat(item.getWeatherNotifiedDate()).isEqualTo(TOMORROW);
-    verify(itemRepository).save(item);
+    verify(repo, never()).findOutdoorCandidatesForPlan(any(), any());
   }
 
   @Test
-  void heavyRainWithoutStormSendsWarningNotification() {
-    ItineraryItem item = buildItem(LocalTime.of(9, 0), LocalTime.of(11, 0), true, null);
-    WeatherNotificationService service = service(properties(true), clockAt(LocalTime.of(18, 0)));
-    when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
-    when(weatherService.forecast(item.getPlace(), TOMORROW, TOMORROW))
-        .thenReturn(response(List.of(hour(LocalTime.of(10, 0), 61, 90, 10))));
+  void checkPlanTomorrowIfLate_atOrBefore18hCutoff_doesNothing() {
+    var repo = mock(ItineraryItemRepository.class);
+    var weather = mock(WeatherService.class);
+    var notices = mock(NotificationService.class);
+    var service =
+        new WeatherNotificationService(repo, weather, props(true), notices, clockAt(18, 0));
 
-    service.checkAndNotify(ITEM_ID, TOMORROW);
+    service.checkPlanTomorrowIfLate(10L);
 
-    ArgumentCaptor<Notice> notice = ArgumentCaptor.forClass(Notice.class);
-    verify(notifications).notifyUser(eq(USER_ID), notice.capture());
-    assertThat(notice.getValue().type()).isEqualTo(WeatherNotificationService.TYPE_WARNING);
+    verify(repo, never()).findOutdoorCandidatesForPlan(any(), any());
   }
 
   @Test
-  void clearWeatherSendsNoNotification() {
-    ItineraryItem item = buildItem(LocalTime.of(9, 0), LocalTime.of(11, 0), true, null);
-    WeatherNotificationService service = service(properties(true), clockAt(LocalTime.of(18, 0)));
-    when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
-    when(weatherService.forecast(item.getPlace(), TOMORROW, TOMORROW))
-        .thenReturn(response(List.of(hour(LocalTime.of(10, 0), 1, 10, 0.0))));
+  void checkPlanTomorrowIfLate_after18hAndJobsEnabled_checksOutdoorCandidates() {
+    var repo = mock(ItineraryItemRepository.class);
+    var weather = mock(WeatherService.class);
+    var notices = mock(NotificationService.class);
+    var service =
+        new WeatherNotificationService(repo, weather, props(true), notices, clockAt(18, 5));
 
-    service.checkAndNotify(ITEM_ID, TOMORROW);
+    ItineraryItem cand = item(1L, 10L, 1, TOMORROW);
+    when(repo.findOutdoorCandidatesForPlan(10L, TOMORROW)).thenReturn(List.of(cand));
+    when(repo.findById(1L)).thenReturn(Optional.of(cand));
+    when(weather.forecast(cand.getPlace(), TOMORROW, TOMORROW))
+        .thenReturn(
+            weatherWith(
+                List.of(hour(LocalTime.of(10, 0), 95, 90, 12.0, "Giông bão")), List.of()));
 
-    verify(notifications, never()).notifyUser(any(), any());
-    assertThat(item.getWeatherNotifiedDate()).isNull();
+    service.checkPlanTomorrowIfLate(10L);
+
+    verify(notices).notifyUser(eq(42L), any(Notice.class));
+    verify(repo).save(cand);
+  }
+
+  // ===== checkAndNotify =====
+
+  @Test
+  void checkAndNotify_stormInWindow_sendsSevereNoticeWithPlanLink() {
+    var repo = mock(ItineraryItemRepository.class);
+    var weather = mock(WeatherService.class);
+    var notices = mock(NotificationService.class);
+    var service =
+        new WeatherNotificationService(repo, weather, props(true), notices, clockAt(18, 0));
+
+    ItineraryItem cand = item(5L, 10L, 2, TODAY);
+    when(repo.findById(5L)).thenReturn(Optional.of(cand));
+    when(weather.forecast(cand.getPlace(), TOMORROW, TOMORROW))
+        .thenReturn(
+            weatherWith(
+                List.of(hour(LocalTime.of(9, 0), 95, 85, 8.0, "Giông bão")), List.of()));
+
+    service.checkAndNotify(5L, TOMORROW);
+
+    ArgumentCaptor<Notice> cap = ArgumentCaptor.forClass(Notice.class);
+    verify(notices).notifyUser(eq(42L), cap.capture());
+    Notice sent = cap.getValue();
+    assertThat(sent.type()).isEqualTo(WeatherNotificationService.TYPE_SEVERE);
+    assertThat(sent.title()).isEqualTo("Cảnh báo giông bão ngày mai");
+    assertThat(sent.link()).isEqualTo("/trips/itinerary/day/2?planId=10");
+    assertThat(sent.message()).contains("27/11").contains("Bà Nà Hills").contains("giông bão");
+    assertThat(cand.getWeatherNotifiedDate()).isEqualTo(TOMORROW);
+    verify(repo).save(cand);
   }
 
   @Test
-  void alreadyNotifiedForTargetDateIsSkipped() {
-    ItineraryItem item = buildItem(LocalTime.of(9, 0), LocalTime.of(11, 0), true, TOMORROW);
-    WeatherNotificationService service = service(properties(true), clockAt(LocalTime.of(18, 0)));
-    when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+  void checkAndNotify_heavyRainWithoutStorm_sendsWarningNotice() {
+    var repo = mock(ItineraryItemRepository.class);
+    var weather = mock(WeatherService.class);
+    var notices = mock(NotificationService.class);
+    var service =
+        new WeatherNotificationService(repo, weather, props(true), notices, clockAt(18, 0));
 
-    service.checkAndNotify(ITEM_ID, TOMORROW);
+    ItineraryItem cand = item(6L, 10L, 1, TOMORROW);
+    when(repo.findById(6L)).thenReturn(Optional.of(cand));
+    when(weather.forecast(cand.getPlace(), TOMORROW, TOMORROW))
+        .thenReturn(
+            weatherWith(
+                List.of(hour(LocalTime.of(11, 0), 63, 80, 6.5, "Mưa vừa")), List.of()));
 
-    verify(notifications, never()).notifyUser(any(), any());
-    verify(weatherService, never()).forecast(any(Place.class), any(), any());
+    service.checkAndNotify(6L, TOMORROW);
+
+    ArgumentCaptor<Notice> cap = ArgumentCaptor.forClass(Notice.class);
+    verify(notices).notifyUser(eq(42L), cap.capture());
+    assertThat(cap.getValue().type()).isEqualTo(WeatherNotificationService.TYPE_WARNING);
+    assertThat(cap.getValue().title()).isEqualTo("Cảnh báo thời tiết xấu ngày mai");
+    assertThat(cand.getWeatherNotifiedDate()).isEqualTo(TOMORROW);
+    verify(repo).save(cand);
   }
 
   @Test
-  void itemRescheduledAwayFromTargetDateIsSkipped() {
-    ItineraryItem item = buildItem(LocalTime.of(9, 0), LocalTime.of(11, 0), true, null);
-    item.getDay().getItinerary().getPlan().setStartDate(TOMORROW.plusDays(1));
-    WeatherNotificationService service = service(properties(true), clockAt(LocalTime.of(18, 0)));
-    when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+  void checkAndNotify_badWeatherOutsideActivityWindow_doesNotNotify() {
+    var repo = mock(ItineraryItemRepository.class);
+    var weather = mock(WeatherService.class);
+    var notices = mock(NotificationService.class);
+    var service =
+        new WeatherNotificationService(repo, weather, props(true), notices, clockAt(18, 0));
 
-    service.checkAndNotify(ITEM_ID, TOMORROW);
+    ItineraryItem cand = item(7L, 10L, 1, TOMORROW); // 09:00..12:00
+    when(repo.findById(7L)).thenReturn(Optional.of(cand));
+    when(weather.forecast(cand.getPlace(), TOMORROW, TOMORROW))
+        .thenReturn(
+            weatherWith(
+                List.of(
+                    hour(LocalTime.of(10, 0), 0, 10, 0.0, "Trời quang"),
+                    hour(LocalTime.of(12, 0), 95, 95, 15.0, "Giông bão")),
+                List.of()));
 
-    verify(notifications, never()).notifyUser(any(), any());
-    verify(weatherService, never()).forecast(any(Place.class), any(), any());
+    service.checkAndNotify(7L, TOMORROW);
+
+    verify(notices, never()).notifyUser(any(), any());
+    verify(repo, never()).save(any());
   }
 
   @Test
-  void gatewayFailureIsCaughtAndSkipped() {
-    ItineraryItem item = buildItem(LocalTime.of(9, 0), LocalTime.of(11, 0), true, null);
-    WeatherNotificationService service = service(properties(true), clockAt(LocalTime.of(18, 0)));
-    when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
-    when(weatherService.forecast(item.getPlace(), TOMORROW, TOMORROW))
-        .thenThrow(new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "unavailable"));
+  void checkAndNotify_alreadyNotifiedForDate_skipsDuplicate() {
+    var repo = mock(ItineraryItemRepository.class);
+    var weather = mock(WeatherService.class);
+    var notices = mock(NotificationService.class);
+    var service =
+        new WeatherNotificationService(repo, weather, props(true), notices, clockAt(18, 0));
 
-    service.checkAndNotify(ITEM_ID, TOMORROW);
+    ItineraryItem cand = item(8L, 10L, 1, TOMORROW);
+    cand.setWeatherNotifiedDate(TOMORROW);
+    when(repo.findById(8L)).thenReturn(Optional.of(cand));
 
-    verify(notifications, never()).notifyUser(any(), any());
-  }
+    service.checkAndNotify(8L, TOMORROW);
 
-  // ===== checkPlanTomorrowIfLate (báo ngay khi kế hoạch PLANNED sau 18h) =====
-
-  @Test
-  void jobsDisabledNeverChecksEvenAfter18h() {
-    WeatherNotificationService service = service(properties(false), clockAt(LocalTime.of(20, 0)));
-
-    service.checkPlanTomorrowIfLate(PLAN_ID);
-
-    verify(itemRepository, never()).findOutdoorCandidatesForPlan(any(), any());
+    verify(weather, never()).forecast(any(Place.class), any(), any());
+    verify(notices, never()).notifyUser(any(), any());
   }
 
   @Test
-  void beforeCutoffLetsTheScheduledJobHandleItInstead() {
-    WeatherNotificationService service = service(properties(true), clockAt(LocalTime.of(17, 59)));
+  void checkAndNotify_missingTimesOrShiftedDateOrApiError_skipsSafely() {
+    var repo = mock(ItineraryItemRepository.class);
+    var weather = mock(WeatherService.class);
+    var notices = mock(NotificationService.class);
+    var service =
+        new WeatherNotificationService(repo, weather, props(true), notices, clockAt(18, 0));
 
-    service.checkPlanTomorrowIfLate(PLAN_ID);
+    // Missing startTime
+    ItineraryItem noTime = item(9L, 10L, 1, TOMORROW);
+    noTime.setStartTime(null);
+    when(repo.findById(9L)).thenReturn(Optional.of(noTime));
+    service.checkAndNotify(9L, TOMORROW);
 
-    verify(itemRepository, never()).findOutdoorCandidatesForPlan(any(), any());
-  }
+    // Date shifted away from targetDate
+    ItineraryItem shifted = item(10L, 10L, 1, TOMORROW.plusDays(2));
+    when(repo.findById(10L)).thenReturn(Optional.of(shifted));
+    service.checkAndNotify(10L, TOMORROW);
 
-  @Test
-  void afterCutoffChecksAndNotifiesImmediately() {
-    ItineraryItem item = buildItem(LocalTime.of(9, 0), LocalTime.of(11, 0), true, null);
-    WeatherNotificationService service = service(properties(true), clockAt(LocalTime.of(20, 0)));
-    when(itemRepository.findOutdoorCandidatesForPlan(PLAN_ID, TOMORROW)).thenReturn(List.of(item));
-    when(itemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
-    when(weatherService.forecast(item.getPlace(), TOMORROW, TOMORROW))
-        .thenReturn(response(List.of(hour(LocalTime.of(10, 0), 95, 80, 10))));
+    // Weather API error
+    ItineraryItem apiErr = item(11L, 10L, 1, TOMORROW);
+    when(repo.findById(11L)).thenReturn(Optional.of(apiErr));
+    when(weather.forecast(apiErr.getPlace(), TOMORROW, TOMORROW))
+        .thenThrow(new ApiException(HttpStatus.BAD_GATEWAY, "Open-Meteo unavailable"));
+    service.checkAndNotify(11L, TOMORROW);
 
-    service.checkPlanTomorrowIfLate(PLAN_ID);
+    // Forecast not available
+    ItineraryItem unavail = item(12L, 10L, 1, TOMORROW);
+    when(repo.findById(12L)).thenReturn(Optional.of(unavail));
+    when(weather.forecast(unavail.getPlace(), TOMORROW, TOMORROW))
+        .thenReturn(weatherWith(List.of(), List.of(TOMORROW)));
+    service.checkAndNotify(12L, TOMORROW);
 
-    verify(notifications).notifyUser(eq(USER_ID), any(Notice.class));
-    assertThat(item.getWeatherNotifiedDate()).isEqualTo(TOMORROW);
+    verify(notices, never()).notifyUser(any(), any());
+    verify(repo, never()).save(any());
   }
 }

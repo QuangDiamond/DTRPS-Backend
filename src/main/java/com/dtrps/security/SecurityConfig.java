@@ -110,7 +110,8 @@ public class SecurityConfig {
                                         // PayOS gọi về, xác thực bằng chữ ký trong nội dung.
                                         .requestMatchers(
                                                 HttpMethod.POST,
-                                                "/api/payments/payos/webhook")
+                                                "/api/payments/payos/webhook",
+                                                "/api/translate/vi-en")
                                         .permitAll()
 
                                         .requestMatchers(

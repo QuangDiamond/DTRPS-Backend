@@ -40,6 +40,17 @@ class NotificationCategoryTest {
   @Test
   void parsesTabNamesCaseInsensitively() {
     assertThat(NotificationCategory.parse("ads")).contains(NotificationCategory.ADS);
+    assertThat(NotificationCategory.parse("weather")).contains(NotificationCategory.WEATHER);
     assertThat(NotificationCategory.parse("nope")).isEmpty();
+  }
+
+  @Test
+  void groupsWeatherPrefixIntoWeatherCategory() {
+    assertThat(NotificationCategory.of("WEATHER_WARNING")).isEqualTo(NotificationCategory.WEATHER);
+    assertThat(NotificationCategory.of("WEATHER_SEVERE")).isEqualTo(NotificationCategory.WEATHER);
+    assertThat(NotificationCategory.of("TRIP_WEATHER_WARNING"))
+        .isEqualTo(NotificationCategory.WEATHER);
+    assertThat(NotificationCategory.of("TRIP_WEATHER_SEVERE"))
+        .isEqualTo(NotificationCategory.WEATHER);
   }
 }
